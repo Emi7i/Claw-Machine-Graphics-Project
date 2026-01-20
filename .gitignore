@@ -1,0 +1,12 @@
+# 3D model files
+res/
+
+# Build files
+build/
+bin/
+obj/
+.vs/
+packages/
+x64/
+Debug/
+Relese/
