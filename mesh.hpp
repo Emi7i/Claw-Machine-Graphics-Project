@@ -35,14 +35,18 @@ public:
     vector<Vertex>       vertices;
     vector<unsigned int> indices;
     vector<Texture>      textures;
+    glm::vec3 diffuseColor;  // Added to handle Kd for textures
+    float opacity;
     unsigned int VAO;
 
     // constructor
-    Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture> textures)
+    Mesh(vector<Vertex> vertices, vector<unsigned int> indices, vector<Texture> textures,  glm::vec3 diffuseColor, float opacity = 1.0f)
     {
         this->vertices = vertices;
         this->indices = indices;
         this->textures = textures;
+        this->diffuseColor = diffuseColor;
+        this->opacity = opacity;
 
         // now that we have all the required data, set the vertex buffers and its attribute pointers.
         setupMesh();
@@ -55,14 +59,18 @@ public:
         unsigned int diffuseNr = 1;
         unsigned int specularNr = 1;
         unsigned int normalNr = 1;
+        bool hasTexture = false; // Track if we actually bound a texture
+    
         for (unsigned int i = 0; i < textures.size(); i++)
         {
             glActiveTexture(GL_TEXTURE0 + i); // active proper texture unit before binding
             // retrieve texture number (the N in diffuse_textureN)
             string number;
             string name = textures[i].type;
-            if (name == "uDiffMap")
+            if (name == "uDiffMap") {
                 number = std::to_string(diffuseNr++);
+                hasTexture = true; // Mark that we have a texture
+            }
             else
                 number = std::to_string(specularNr++); // transfer unsigned int to string
 
@@ -71,6 +79,11 @@ public:
             // and finally bind the texture
             glBindTexture(GL_TEXTURE_2D, textures[i].id);
         }
+    
+        // Send material color and a flag to the shader
+        shader.setVec3("uDiffuseColor", diffuseColor);
+        shader.setInt("uHasTexture", hasTexture ? 1 : 0);
+        shader.setFloat("uOpacity", opacity);  
 
         // draw mesh
         glBindVertexArray(VAO);

@@ -43,12 +43,25 @@ public:
         loadModel(path);
     }
 
-    // draws the model, and thus all its meshes
+    // draws the model, but look put for transparency order
     void Draw(Shader& shader)
-    {
-        for (unsigned int i = 0; i < meshes.size(); i++)
-            meshes[i].Draw(shader);
-    }
+	{
+	    // Draw opaque meshes first
+	    for (unsigned int i = 0; i < meshes.size(); i++)
+	    {
+	        if(meshes[i].opacity >= 1.0f)  // Only opaque
+	            meshes[i].Draw(shader);
+	    }
+    
+	    // Then draw transparent meshes (disable depth writing)
+	    glDepthMask(GL_FALSE);
+	    for (unsigned int i = 0; i < meshes.size(); i++)
+	    {
+	        if(meshes[i].opacity < 1.0f)  // Only transparent
+	            meshes[i].Draw(shader);
+	    }
+	    glDepthMask(GL_TRUE);  // Re-enable depth writing
+	}
 
 
 private:
@@ -65,10 +78,15 @@ private:
             return;
         }
         // retrieve the directory path of the filepath
-        directory = path.substr(0, path.find_last_of('/'));
+        // Find the last slash (either forward or backward)
+        size_t lastSlash = path.find_last_of("/\\");
+        if (lastSlash != string::npos) {
+            directory = path.substr(0, lastSlash);
+        } else {
+            directory = "."; // Path is in the current working directory
+        }
 
-        // process ASSIMP's root node recursively
-        processNode(scene->mRootNode, scene);
+        processNode(scene->mRootNode, scene);   
     }
 
     // processes a node in a recursive fashion. Processes each individual mesh located at the node and repeats this process on its children nodes (if any).
@@ -96,6 +114,7 @@ private:
         vector<Vertex> vertices;
         vector<unsigned int> indices;
         vector<Texture> textures;
+        glm::vec3 diffuseColor(0.8f); // default gray
 
         // walk through each of the mesh's vertices
         for (unsigned int i = 0; i < mesh->mNumVertices; i++)
@@ -151,9 +170,17 @@ private:
         // 2. specular maps
         vector<Texture> specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR, "uSpecMap");
         textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+        
+        // Get the diffuse color from the material
+        aiColor3D color(0.8f, 0.8f, 0.8f);
+        material->Get(AI_MATKEY_COLOR_DIFFUSE, color);
+        diffuseColor = glm::vec3(color.r, color.g, color.b);
+        
+        float opacity = 1.0f;
+        material->Get(AI_MATKEY_OPACITY, opacity);
 
         // return a mesh object created from the extracted mesh data
-        return Mesh(vertices, indices, textures);
+        return Mesh(vertices, indices, textures, diffuseColor, opacity);
     }
 
     // checks all material textures of a given type and loads the textures if they're not loaded yet.

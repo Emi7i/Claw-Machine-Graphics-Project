@@ -9,14 +9,33 @@ uniform vec3 uLightPos;
 uniform vec3 uViewPos; 
 uniform vec3 uLightColor;
 
+uniform vec3 uDiffuseColor;  // Material color
+uniform int uHasTexture; 
+uniform float uOpacity;   
+
 uniform sampler2D uDiffMap1;
 
 void main()
 {    
+    // Get base color with alpha
+    vec4 baseColor;
+    if(uHasTexture == 1) {
+        baseColor = texture(uDiffMap1, chUV);
+    } else {
+        baseColor = vec4(uDiffuseColor, 1.0);
+    }
+    
+    // Apply material opacity
+    baseColor.a *= uOpacity;
+    
+    // Discard fully transparent pixels
+    if(baseColor.a < 0.1)
+        discard;
 
+    // ambient
     float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * uLightColor;
-  	
+    
     // diffuse 
     vec3 norm = normalize(chNormal);
     vec3 lightDir = normalize(uLightPos - chFragPos);
@@ -30,6 +49,7 @@ void main()
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
     vec3 specular = specularStrength * spec * uLightColor;  
 
-    FragColor = texture(uDiffMap1, chUV) * vec4(ambient + diffuse + specular, 1.0);
+    // Combine lighting with base color (keep alpha)
+    vec3 result = (ambient + diffuse + specular) * baseColor.rgb;
+    FragColor = vec4(result, baseColor.a);
 }
-

@@ -148,13 +148,15 @@
     <None Include="basic.frag" />
     <None Include="basic.vert" />
     <None Include="packages.config" />
-    <None Include="res\bulbasor.STL" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gameobject.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="model.hpp" />
-    <ClInclude Include="texture.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="res\claw_machine.mtl" />
+    <Content Include="res\claw_machine.obj" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

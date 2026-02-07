@@ -1,5 +1,6 @@
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS
+#pragma comment(lib, "opengl32.lib") //Added so Rider will stop complaining
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -15,7 +16,6 @@ const unsigned int wWidth = 800;
 const unsigned int wHeight = 600;
 
 GameObject* fox;
-GameObject* bread;
 
 void InitializeGameObjects();
 
@@ -62,6 +62,11 @@ int main()
     unifiedShader.setMat4("uV", view);
 
     glEnable(GL_DEPTH_TEST);
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    // Enable blending for transparency
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
 
 	double timeLast = glfwGetTime();
 	double deltaTime = 0.0;
@@ -81,7 +86,7 @@ int main()
 		MoveCamera(window, view, unifiedShader, deltaTime);
 
         // Animate
-        fox->Rotate(30.0f * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
+        //fox->Rotate(30.0f * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
 
         // Draw
         fox->Draw(unifiedShader);
@@ -91,21 +96,13 @@ int main()
     }
 
     delete fox;
-    delete bread;
-
     glfwTerminate();
     return 0;
 }
 
 void InitializeGameObjects() {
-    fox = new GameObject("res/low-poly-fox.obj");
-    fox->Scale(glm::vec3(0.6f, 0.6f, 0.6f));
-
-    bread = new GameObject("res/bread.obj");
-    bread->Scale(glm::vec3(0.6f, 0.6f, 0.6f));
-    bread->Rotate(-90.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-    bread->Translate(glm::vec3(2.0f, 0.5f, 0.0f));
-    fox->AddChild(bread);
+    fox = new GameObject("res/claw_machine.obj");
+    fox->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
 }
 
 
