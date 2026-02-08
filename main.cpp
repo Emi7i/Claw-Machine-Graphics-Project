@@ -5,6 +5,9 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <thread>
+#include <chrono>
+#include <windows.h>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -87,6 +90,9 @@ int main()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
+    // Disable vsync to allow custom frame rate
+    glfwSwapInterval(0);
+    
     // Debug
     physicsWorld->setIsDebugRenderingEnabled(true);
     rp3d::DebugRenderer& debugRenderer = physicsWorld->getDebugRenderer();
@@ -98,6 +104,16 @@ int main()
 
     double timeLast = glfwGetTime();
     double deltaTime = 0.0;
+    
+    // Frame limiter settings
+    const double targetFPS = 75.0;
+    const double targetFrameTime = 1.0 / targetFPS;
+    
+    // High-precision timing variables
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER lastFrameTime;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&lastFrameTime);
 
     // ------------------------- MAIN LOOP -------------------------
     while (!glfwWindowShouldClose(window))
@@ -142,6 +158,30 @@ int main()
 
         glfwSwapBuffers(window);
         glfwPollEvents();
+        
+        // High-precision frame limiter using QueryPerformanceCounter
+        LARGE_INTEGER currentTime;
+        QueryPerformanceCounter(&currentTime);
+        
+        // Calculate elapsed time in seconds
+        double elapsed = static_cast<double>(currentTime.QuadPart - lastFrameTime.QuadPart) / frequency.QuadPart;
+        
+        // If we haven't reached target frame time, busy-wait for precision
+        if (elapsed < targetFrameTime) {
+            LARGE_INTEGER targetTime;
+            targetTime.QuadPart = lastFrameTime.QuadPart + static_cast<long long>(targetFrameTime * frequency.QuadPart);
+            
+            // Busy-wait until we reach the target time
+            while (currentTime.QuadPart < targetTime.QuadPart) {
+                QueryPerformanceCounter(&currentTime);
+                // Optional: Yield CPU occasionally to prevent 100% usage
+                if ((currentTime.QuadPart % 1000) == 0) {
+                    std::this_thread::yield();
+                }
+            }
+        }
+        
+        lastFrameTime = currentTime;
     }
 
     // Cleanup physics
