@@ -17,6 +17,11 @@ public:
 private:
     glm::mat4 transform;
     std::vector<GameObject*> children;
+    
+    // Keep collision data alive - ReactPhysics3D stores pointers, not copies!
+    std::vector<rp3d::Vector3> collisionVertices;
+    std::vector<int> collisionIndices;
+    std::vector<float> collisionVertexArray;
 
 public:
     // Physics
@@ -103,7 +108,7 @@ public:
 
         // Update Scale (Collider level)
         // ReactPhysics3D requires updating the scale on each collider attached to the body
-                for (uint32_t i = 0; i < rigidBody->getNbColliders(); i++) {
+        for (uint32_t i = 0; i < rigidBody->getNbColliders(); i++) {
             rp3d::Collider* collider = rigidBody->getCollider(i);
         }
     }
@@ -135,8 +140,46 @@ public:
         rigidBody->setType(bodyType);
     }
     
+    void AddConcaveCollision(rp3d::PhysicsCommon& physicsCommon) {
+        if (!rigidBody || !model) return;
+    
+        // Store in member variables so the data stays alive!
+        collisionVertices.clear();
+        collisionIndices.clear();
+    
+        model->GetMeshDataForPhysics(collisionVertices, collisionIndices, scale);
+    
+        // Create triangle vertex array for concave mesh
+        rp3d::TriangleVertexArray triangleArray(
+            collisionVertices.size(),
+            &collisionVertices[0],
+            sizeof(rp3d::Vector3),
+            collisionIndices.size() / 3,
+            collisionIndices.data(),
+            3 * sizeof(int),
+            rp3d::TriangleVertexArray::VertexDataType::VERTEX_FLOAT_TYPE,
+            rp3d::TriangleVertexArray::IndexDataType::INDEX_INTEGER_TYPE
+        );
+        
+    
+        // Create the triangle mesh directly from the array
+        std::vector<rp3d::Message> messages;
+        rp3d::TriangleMesh* triangleMesh = physicsCommon.createTriangleMesh(triangleArray, messages);
+        
+        std::cout << "=== Triangle Mesh Messages ===" << std::endl;
+        for (const auto& msg : messages) {
+            std::cout << "Message: " << msg.text << std::endl;
+        }
+    
+        rp3d::ConcaveMeshShape* concaveShape = physicsCommon.createConcaveMeshShape(triangleMesh);
+    
+        rigidBody->addCollider(concaveShape, rp3d::Transform::identity());
+    
+        std::cout << "Added Concave collision with " << collisionIndices.size() / 3 << " triangles." << std::endl;
+    }
+    
     // Add perfect mesh collision to this GameObject
-    void AddMeshCollision(rp3d::PhysicsCommon& physicsCommon) {
+    void AddConvexCollision(rp3d::PhysicsCommon& physicsCommon) {
         if (!rigidBody) {
             std::cout << "Error: RigidBody must be created before adding mesh collision!" << std::endl;
             return;
@@ -147,26 +190,28 @@ public:
             return;
         }
         
+        // Store in member variables so the data stays alive!
+        collisionVertices.clear();
+        collisionIndices.clear();
+        collisionVertexArray.clear();
+        
         // Get mesh data from model
-        std::vector<rp3d::Vector3> vertices;
-        std::vector<int> indices;
-        model->GetMeshDataForPhysics(vertices, indices, scale);
+        model->GetMeshDataForPhysics(collisionVertices, collisionIndices, scale);
         
         // Convert to float arrays for ReactPhysics3D
-        std::vector<float> vertexArray;
-        for (const auto& v : vertices) {
-            vertexArray.push_back(v.x);
-            vertexArray.push_back(v.y);
-            vertexArray.push_back(v.z);
+        for (const auto& v : collisionVertices) {
+            collisionVertexArray.push_back(v.x);
+            collisionVertexArray.push_back(v.y);
+            collisionVertexArray.push_back(v.z);
         }
         
         // Create TriangleVertexArray
         rp3d::TriangleVertexArray triangleArray(
-            static_cast<rp3d::uint32>(vertices.size()),
-            vertexArray.data(),
+            static_cast<rp3d::uint32>(collisionVertices.size()),
+            collisionVertexArray.data(),
             3 * sizeof(float),
-            static_cast<rp3d::uint32>(indices.size() / 3),
-            indices.data(),
+            static_cast<rp3d::uint32>(collisionIndices.size() / 3),
+            collisionIndices.data(),
             3 * sizeof(int),
             rp3d::TriangleVertexArray::VertexDataType::VERTEX_FLOAT_TYPE,
             rp3d::TriangleVertexArray::IndexDataType::INDEX_INTEGER_TYPE
@@ -182,7 +227,7 @@ public:
         // Add the collider to the rigid body
         rigidBody->addCollider(meshShape, rp3d::Transform::identity());
         
-        std::cout << "Added mesh collision with " << indices.size() / 3 << " triangles" << std::endl;
+        std::cout << "Added mesh collision with " << collisionIndices.size() / 3 << " triangles" << std::endl;
     }
     
     // Helper to add simple box collision
@@ -196,8 +241,6 @@ public:
             rp3d::Vector3(halfExtents.x, halfExtents.y, halfExtents.z)
         );
         rigidBody->addCollider(boxShape, rp3d::Transform::identity());
-        
-        std::cout << "Added box collision" << std::endl;
     }
 };
 

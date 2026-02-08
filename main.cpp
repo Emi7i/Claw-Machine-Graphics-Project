@@ -12,7 +12,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <reactphysics3d/reactphysics3d.h>
 #include "gameobject.hpp"
-#include "collision_debug.hpp"
 
 const unsigned int wWidth = 800;
 const unsigned int wHeight = 600;
@@ -140,7 +139,7 @@ void InitializeGameObjects() {
     claw_machine->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
     claw_machine->Translate(glm::vec3(0.0f, GROUND_HEIGHT, 0.0f));
     
-    claw_machine->AddMeshCollision(physicsCommon);
+    claw_machine->AddConcaveCollision(physicsCommon);
     
     // ==================== GROUND ====================
     ground = new GameObject("res/ground.obj", physicsWorld, rp3d::BodyType::STATIC);
@@ -153,8 +152,6 @@ void InitializeGameObjects() {
     claw = new GameObject("res/claw.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
     claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
     claw->Translate(glm::vec3(0.0f, 2.0f, 0.0f));
-    
-    claw->AddMeshCollision(physicsCommon);
     
     // ==================== TOYS ====================
     birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
