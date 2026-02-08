@@ -28,8 +28,12 @@ GameObject* colliders[9];
 rp3d::PhysicsCommon physicsCommon;
 rp3d::PhysicsWorld* physicsWorld = nullptr;
 
+// Game state
+bool GameStarted = false;
+
 void InitializeGameObjects();
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime);
+bool IsLookingAtClawMachine(const glm::mat4& viewMatrix, GameObject* target);
 
 int main()
 {
@@ -105,6 +109,14 @@ int main()
             glfwSetWindowShouldClose(window, true);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Check for E key to start game when looking at claw machine
+        if (!GameStarted && glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+            if (IsLookingAtClawMachine(view, claw_machine)) {
+                GameStarted = true;
+                std::cout << "Game Started!" << std::endl;
+            }
+        }
 
         MoveCamera(window, view, unifiedShader, deltaTime);
 
@@ -183,8 +195,10 @@ void InitializeGameObjects() {
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime)
 {
     const float cameraSpeed = 5.0f; 
+    const float rotationSpeed = 26.0f;
     float dt = static_cast<float>(deltaTime);  // Cast once for clarity
     
+    // WASD - Translation movement
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
         viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, -cameraSpeed * dt));
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -193,6 +207,55 @@ void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double
         viewMatrix = glm::translate(viewMatrix, glm::vec3(-cameraSpeed * dt, 0.0f, 0.0f));
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
         viewMatrix = glm::translate(viewMatrix, glm::vec3(cameraSpeed * dt, 0.0f, 0.0f));
+    
+    // Arrow Keys - Rotation around center (0, 0, 0)
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+        // Rotate around Y axis (horizontal rotation)
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(rotationSpeed * dt), glm::vec3(0.0f, 1.0f, 0.0f));
+        viewMatrix = viewMatrix * rotation;
+    }
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+        // Rotate around Y axis (horizontal rotation)
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(-rotationSpeed * dt), glm::vec3(0.0f, 1.0f, 0.0f));
+        viewMatrix = viewMatrix * rotation;
+    }
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+        // Rotate around X axis (vertical rotation)
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(rotationSpeed * dt), glm::vec3(1.0f, 0.0f, 0.0f));
+        viewMatrix = viewMatrix * rotation;
+    }
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+        // Rotate around X axis (vertical rotation)
+        glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(-rotationSpeed * dt), glm::vec3(1.0f, 0.0f, 0.0f));
+        viewMatrix = viewMatrix * rotation;
+    }
 
     shader.setMat4("uV", viewMatrix);
+}
+
+bool IsLookingAtClawMachine(const glm::mat4& viewMatrix, GameObject* target) {
+    // Extract camera position from view matrix (inverse of view matrix)
+    glm::mat4 viewInverse = glm::inverse(viewMatrix);
+    glm::vec3 cameraPos = glm::vec3(viewInverse[3]);
+    
+    // Extract camera forward direction from view matrix
+    glm::vec3 cameraForward = glm::normalize(glm::vec3(-viewMatrix[0][2], -viewMatrix[1][2], -viewMatrix[2][2]));
+    
+    // Get target position
+    glm::vec3 targetPos = target->position;
+    
+    // Calculate direction to target
+    glm::vec3 toTarget = glm::normalize(targetPos - cameraPos);
+    
+    // Calculate dot product to check if we're looking at the target
+    float dotProduct = glm::dot(cameraForward, toTarget);
+    
+    // Check if we're looking within a reasonable angle (cos(30 degrees) ≈ 0.866)
+    float threshold = 0.866f;
+    
+    // Also check distance to make sure we're close enough
+    float distance = glm::length(targetPos - cameraPos);
+    float maxDistance = 5.0f;
+    
+    return dotProduct > threshold && distance < maxDistance;
 }
