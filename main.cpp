@@ -43,26 +43,17 @@ Logo* logo = nullptr;
 // Game state
 bool GameStarted = false;
 
+// Claw movement state
+bool shouldMoveDown = false;
+bool shouldMoveUp = false;
+bool hasToy = false;
+glm::vec3 originalPosition;
+bool canMoveByKeys = true;
+
 void InitializeGameObjects();
 void MoveClaw(GLFWwindow* window, double deltaTime);
-
-// Mouse callback
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    if (camera)
-    {
-        camera->ProcessMouseMovement(static_cast<float>(xpos), static_cast<float>(ypos));
-    }
-}
-
-// Scroll callback
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    if (camera)
-    {
-        camera->ProcessMouseScroll(static_cast<float>(yoffset));
-    }
-}
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 
 int main()
 {
@@ -81,7 +72,7 @@ int main()
     const GLFWvidmode* mode = glfwGetVideoMode(monitor);
     
     // Use monitor's native resolution
-    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Physics Demo with Mesh Collision", monitor, NULL);
+    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Claw Machine", monitor, NULL);
     if (window == NULL)
     {
         std::cout << "Window fail!\n" << std::endl;
@@ -107,7 +98,6 @@ int main()
     rp3d::PhysicsWorld::WorldSettings settings;
     settings.gravity = rp3d::Vector3(0.0f, -9.81f, 0.0f);
     physicsWorld = physicsCommon.createPhysicsWorld(settings);
-    std::cout << "Physics world created!" << std::endl;
 
     InitializeGameObjects();
 
@@ -136,13 +126,6 @@ int main()
     
     // Disable vsync to allow custom frame rate
     glfwSwapInterval(0);
-    
-    // Debug
-    physicsWorld->setIsDebugRenderingEnabled(true);
-    rp3d::DebugRenderer& debugRenderer = physicsWorld->getDebugRenderer();
-    debugRenderer.setIsDebugItemDisplayed(rp3d::DebugRenderer::DebugItem::COLLISION_SHAPE, true);
-    debugRenderer.setIsDebugItemDisplayed(rp3d::DebugRenderer::DebugItem::CONTACT_POINT, true);
-    debugRenderer.setIsDebugItemDisplayed(rp3d::DebugRenderer::DebugItem::COLLIDER_AABB, true);
 
     double timeLast = glfwGetTime();
     double deltaTime = 0.0;
@@ -156,8 +139,9 @@ int main()
     LARGE_INTEGER lastFrameTime;
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&lastFrameTime);
-
-    // ------------------------- MAIN LOOP -------------------------
+    
+                        
+        // ------------------------- MAIN LOOP -------------------------
     while (!glfwWindowShouldClose(window))
     {
         double timeNow = glfwGetTime();
@@ -232,6 +216,76 @@ int main()
         unifiedShader.setMat4("uP", projection);
 
         MoveClaw(window, deltaTime);
+        
+        // Handle Space key for claw movement 
+        static bool spacePressed = false; 
+        if (GameStarted && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spacePressed && !shouldMoveDown && !shouldMoveUp)
+        {
+            spacePressed = true;
+            shouldMoveDown = true;
+            canMoveByKeys = false;
+            originalPosition = claw->position;
+            std::cout << "Claw starting descent from position: (" << originalPosition.x << ", " << originalPosition.y << ", " << originalPosition.z << ")" << std::endl;
+        }
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
+        {
+            spacePressed = false;
+        }
+        
+        // Handle claw vertical movement
+        if (shouldMoveDown)
+        {
+            const float descentSpeed = 2.0f;
+            glm::vec3 movement(0.0f, -descentSpeed * static_cast<float>(deltaTime), 0.0f);
+            glm::vec3 oldPosition = claw->position;
+            glm::mat4 oldTransform = claw->GetTransform();
+                        
+            claw->Translate(movement);
+            
+            // Check for collision with claw machine or ground
+            if (physicsWorld->testOverlap(claw->rigidBody, claw_machine->rigidBody) ||
+                physicsWorld->testOverlap(claw->rigidBody, ground->rigidBody))
+            {
+                // Collision detected, restore position and start moving up
+                claw->position = oldPosition;
+                claw->transform = oldTransform;
+                claw->SyncPhysicsFromTransform();
+                
+                shouldMoveDown = false;
+                shouldMoveUp = true;
+                std::cout << "Claw hit collision, starting ascent" << std::endl;
+            }
+        }
+        
+        if (shouldMoveUp)
+        {
+            const float ascentSpeed = 3.0f;
+            glm::vec3 currentPos = claw->position;
+            glm::vec3 direction = glm::normalize(originalPosition - currentPos);
+            float distance = glm::distance(currentPos, originalPosition);
+            
+            if (distance > 0.1f)
+            {
+                glm::vec3 movement = direction * ascentSpeed * static_cast<float>(deltaTime);
+                if (glm::length(movement) > distance)
+                {
+                    movement = direction * distance; // Don't overshoot
+                }
+                claw->Translate(movement);
+            }
+            else
+            {
+                // Reached original position
+                claw->position = originalPosition;
+                claw->transform = glm::translate(glm::mat4(1.0f), originalPosition) * 
+                                 glm::scale(glm::mat4(1.0f), glm::vec3(0.4f, 0.4f, 0.4f));
+                claw->SyncPhysicsFromTransform();
+                
+                shouldMoveUp = false;
+                canMoveByKeys = true;
+                std::cout << "Claw returned to original position" << std::endl;
+            }
+        }
 
         // Update physics simulation (cast to float/decimal for ReactPhysics3D)
         physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
@@ -283,9 +337,9 @@ int main()
     }
 
     // Cleanup
+    physicsCommon.destroyPhysicsWorld(physicsWorld);
     delete camera;
     delete logo;
-    physicsCommon.destroyPhysicsWorld(physicsWorld);
     delete claw;
     delete claw_machine;
     delete ground;
@@ -312,7 +366,7 @@ void InitializeGameObjects()
     claw = new GameObject("res/claw.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
     claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
     claw->Translate(glm::vec3(0.0f, 1.0f, 0.0f));
-    claw->AddBoxCollision(physicsCommon, glm::vec3(0.1f, 0.1f, 0.1f));
+    claw->AddBoxCollision(physicsCommon, glm::vec3(0.1f, 0.3f, 0.1f));
     
     // ==================== TOYS ====================
     birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
@@ -323,15 +377,15 @@ void InitializeGameObjects()
 
 void MoveClaw(GLFWwindow* window, double deltaTime)
 {
-    if (!GameStarted) return;
+    if (!GameStarted || !canMoveByKeys) return;
     
     const float clawSpeed = 3.0f;
     float dt = static_cast<float>(deltaTime);
     
     // Store current position to restore if collision occurs
     glm::vec3 oldPosition = claw->position;
-    glm::mat4 oldTransform = claw->GetTransform();
-    
+            glm::mat4 oldTransform = claw->GetTransform();
+                    
     // Calculate potential new position
     glm::vec3 movement(0.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -361,5 +415,23 @@ void MoveClaw(GLFWwindow* window, double deltaTime)
         claw->position = oldPosition;
         claw->transform = oldTransform;
         claw->SyncPhysicsFromTransform();
+    }
+}
+
+// Mouse callback
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (camera)
+    {
+        camera->ProcessMouseMovement(static_cast<float>(xpos), static_cast<float>(ypos));
+    }
+}
+
+// Scroll callback
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    if (camera)
+    {
+        camera->ProcessMouseScroll(static_cast<float>(yoffset));
     }
 }
