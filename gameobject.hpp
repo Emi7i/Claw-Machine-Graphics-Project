@@ -13,9 +13,9 @@
 class GameObject {
 public: 
     Model* model;
+    glm::mat4 transform;
     
 private:
-    glm::mat4 transform;
     std::vector<GameObject*> children;
     
     // Keep collision data alive - ReactPhysics3D stores pointers, not copies!
@@ -53,6 +53,13 @@ public:
         for (auto child : children) {
             delete child;
         }
+    }
+    
+    void SetTransform(const glm::mat4& newTransform) {
+        transform = newTransform;
+        position = glm::vec3(transform[3]);
+        rotation = glm::quat_cast(transform);
+        SyncPhysicsFromTransform();
     }
     
     void AddChild(GameObject* child) {

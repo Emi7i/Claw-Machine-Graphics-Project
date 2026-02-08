@@ -33,6 +33,7 @@ bool GameStarted = false;
 
 void InitializeGameObjects();
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime);
+void MoveClaw(GLFWwindow* window, double deltaTime);
 bool IsLookingAtClawMachine(const glm::mat4& viewMatrix, GameObject* target);
 
 int main()
@@ -119,6 +120,7 @@ int main()
         }
 
         MoveCamera(window, view, unifiedShader, deltaTime);
+        MoveClaw(window, deltaTime);
 
         // Update physics simulation (cast to float/decimal for ReactPhysics3D)
         physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
@@ -181,8 +183,7 @@ void InitializeGameObjects() {
     claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
     claw->Translate(glm::vec3(0.0f, 1.0f, 0.0f));
     
-    
-    claw->AddConvexCollision(physicsCommon);
+    claw->AddBoxCollision(physicsCommon, glm::vec3(0.1f, 0.1f, 0.1f));
     
     // ==================== TOYS ====================
     birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
@@ -199,14 +200,17 @@ void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double
     float dt = static_cast<float>(deltaTime);  // Cast once for clarity
     
     // WASD - Translation movement
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, -cameraSpeed * dt));
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, cameraSpeed * dt));
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(-cameraSpeed * dt, 0.0f, 0.0f));
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(cameraSpeed * dt, 0.0f, 0.0f));
+    if (!GameStarted)
+    {
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, -cameraSpeed * dt));
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, cameraSpeed * dt));
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            viewMatrix = glm::translate(viewMatrix, glm::vec3(-cameraSpeed * dt, 0.0f, 0.0f));
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            viewMatrix = glm::translate(viewMatrix, glm::vec3(cameraSpeed * dt, 0.0f, 0.0f));
+    }
     
     // Arrow Keys - Rotation around center (0, 0, 0)
     if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
@@ -258,4 +262,43 @@ bool IsLookingAtClawMachine(const glm::mat4& viewMatrix, GameObject* target) {
     float maxDistance = 5.0f;
     
     return dotProduct > threshold && distance < maxDistance;
+}
+
+void MoveClaw(GLFWwindow* window, double deltaTime)
+{
+    if (!GameStarted) return;
+    
+    const float clawSpeed = 3.0f;
+    float dt = static_cast<float>(deltaTime);
+    
+    // Store current position to restore if collision occurs
+    glm::vec3 oldPosition = claw->position;
+    glm::mat4 oldTransform = claw->GetTransform(); // Store the whole transform!
+    
+    // Calculate potential new position
+    glm::vec3 movement(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+        movement.z -= clawSpeed * dt;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        movement.z += clawSpeed * dt;
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        movement.x -= clawSpeed * dt;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        movement.x += clawSpeed * dt;
+    }
+    
+    // Apply movement
+    claw->Translate(movement);
+    
+    // Manually test overlap (kinematic vs static doesn't trigger callbacks!)
+    if (physicsWorld->testOverlap(claw->rigidBody, claw_machine->rigidBody)) {
+
+        // Restore EVERYTHING - position, transform, and physics
+        claw->position = oldPosition;
+        claw->transform = oldTransform; // Need to add public access or add a setter
+        claw->SyncPhysicsFromTransform();
+    }
 }
