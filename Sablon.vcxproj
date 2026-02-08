@@ -147,6 +147,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="shader.hpp" />
+    <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="basic.frag" />
@@ -158,6 +159,7 @@
     <ClInclude Include="gameobject.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="model.hpp" />
+    <ClInclude Include="ui.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Content Include=".gitignore" />

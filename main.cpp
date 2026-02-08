@@ -16,6 +16,8 @@
 #include <reactphysics3d/reactphysics3d.h>
 #include "gameobject.hpp"
 #include "Camera.hpp"
+#include "shader.hpp"
+#include "ui.hpp"
 
 const unsigned int wWidth = 800;
 const unsigned int wHeight = 600;
@@ -34,6 +36,9 @@ rp3d::PhysicsWorld* physicsWorld = nullptr;
 
 // Camera
 Camera* camera = nullptr;
+
+// UI
+Logo* logo = nullptr;
 
 // Game state
 bool GameStarted = false;
@@ -124,6 +129,10 @@ int main()
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // --- LOGO SETUP ---
+    logo = new Logo();
+    logo->Initialize("Logo.png", "res");
     
     // Disable vsync to allow custom frame rate
     glfwSwapInterval(0);
@@ -236,6 +245,12 @@ int main()
         ground->Draw(unifiedShader); 
         birb->Draw(unifiedShader);
 
+        // Draw UI Overlay
+        if (logo && logo->IsLoaded()) {
+            logo->Render();
+        }
+        unifiedShader.use(); // Switch back to unified shader
+
         glfwSwapBuffers(window);
         glfwPollEvents();
         
@@ -269,6 +284,7 @@ int main()
 
     // Cleanup
     delete camera;
+    delete logo;
     physicsCommon.destroyPhysicsWorld(physicsWorld);
     delete claw;
     delete claw_machine;
