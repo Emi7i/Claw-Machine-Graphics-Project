@@ -160,6 +160,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include=".gitignore" />
+    <Content Include="README.md" />
     <Content Include="res\claw_machine.mtl" />
     <Content Include="res\claw_machine.obj" />
   </ItemGroup>
