@@ -22,6 +22,7 @@ GameObject* claw;
 GameObject* claw_machine;
 GameObject* ground;
 GameObject* birb;
+GameObject* colliders[9];
 
 // Physics objects
 rp3d::PhysicsCommon physicsCommon;
@@ -119,6 +120,11 @@ int main()
         ground->Draw(unifiedShader); 
         birb->Draw(unifiedShader);
         
+        /*// Draw colliders
+        for (int i = 0; i < 9; i++) {
+            colliders[i]->Draw(unifiedShader);
+        }*/
+        
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -141,6 +147,16 @@ void InitializeGameObjects() {
     
     claw_machine->AddConcaveCollision(physicsCommon);
     
+        
+    /*// ==================== COLLIDERS ====================
+    for (int i = 0; i < 9; i++) {
+        std::string colliderPath = "res/col" + std::to_string(i + 1) + ".obj";
+        colliders[i] = new GameObject(colliderPath.c_str(), physicsWorld, rp3d::BodyType::STATIC);
+        colliders[i]->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+        colliders[i]->Translate(glm::vec3(0.0f, GROUND_HEIGHT, 0.0f));
+        colliders[i]->AddConvexCollision(physicsCommon);
+    }*/
+    
     // ==================== GROUND ====================
     ground = new GameObject("res/ground.obj", physicsWorld, rp3d::BodyType::STATIC);
     ground->Translate(glm::vec3(0.0f, -2.0f, 0.0f));
@@ -151,14 +167,17 @@ void InitializeGameObjects() {
     // ==================== CLAW ====================
     claw = new GameObject("res/claw.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
     claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
-    claw->Translate(glm::vec3(0.0f, 2.0f, 0.0f));
+    claw->Translate(glm::vec3(0.0f, 1.0f, 0.0f));
+    
+    
+    claw->AddConvexCollision(physicsCommon);
     
     // ==================== TOYS ====================
     birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
     birb->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
     birb->Translate(glm::vec3(0.0f, -1.0f, 0.0f));
     
-    birb->AddBoxCollision(physicsCommon, glm::vec3(0.5f, 0.5f, 0.5f));
+    birb->AddBoxCollision(physicsCommon, glm::vec3(0.12f, 0.12f, 0.12f));
 }
 
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime)
