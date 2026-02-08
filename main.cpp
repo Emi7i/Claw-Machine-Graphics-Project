@@ -1,6 +1,6 @@
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS
-#pragma comment(lib, "opengl32.lib") //Added so Rider will stop complaining
+#pragma comment(lib, "opengl32.lib")  // Added so Rider will stop complaining
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -10,15 +10,22 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <reactphysics3d/reactphysics3d.h>
 #include "gameobject.hpp"
 
 const unsigned int wWidth = 800;
 const unsigned int wHeight = 600;
 
-GameObject* fox;
+#define GROUND_HEIGHT 0.2f
+
+GameObject* claw;
+GameObject* ground;
+
+// Physics objects
+rp3d::PhysicsCommon physicsCommon;
+rp3d::PhysicsWorld* physicsWorld = nullptr;
 
 void InitializeGameObjects();
-
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime);
 
 int main()
@@ -33,7 +40,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(wWidth, wHeight, "LearnOpenGL", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(wWidth, wHeight, "Physics Demo with Mesh Collision", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Window fail!\n" << std::endl;
@@ -47,6 +54,12 @@ int main()
         std::cout << "GLEW fail! :(\n" << std::endl;
         return -3;
     }
+
+    // Create physics world
+    rp3d::PhysicsWorld::WorldSettings settings;
+    settings.gravity = rp3d::Vector3(0.0f, -9.81f, 0.0f);
+    physicsWorld = physicsCommon.createPhysicsWorld(settings);
+    std::cout << "Physics world created!" << std::endl;
 
     InitializeGameObjects();
 
@@ -63,60 +76,80 @@ int main()
 
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    // Enable blending for transparency
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    
 
-	double timeLast = glfwGetTime();
-	double deltaTime = 0.0;
+    double timeLast = glfwGetTime();
+    double deltaTime = 0.0;
 
     // ------------------------- MAIN LOOP -------------------------
     while (!glfwWindowShouldClose(window))
     {
-		double timeNow = glfwGetTime();
-		deltaTime = timeNow - timeLast;
-		timeLast = timeNow;
+        double timeNow = glfwGetTime();
+        deltaTime = timeNow - timeLast;
+        timeLast = timeNow;
 
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
             glfwSetWindowShouldClose(window, true);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		MoveCamera(window, view, unifiedShader, deltaTime);
+        MoveCamera(window, view, unifiedShader, deltaTime);
 
-        // Animate
-        //fox->Rotate(30.0f * deltaTime, glm::vec3(0.0f, 1.0f, 0.0f));
+        // Update physics simulation (cast to float/decimal for ReactPhysics3D)
+        physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
+        
+        // Update claw position from physics (if it's dynamic)
+        claw->UpdateFromPhysics();
 
         // Draw
-        fox->Draw(unifiedShader);
+        claw->Draw(unifiedShader);
+        ground->Draw(unifiedShader); 
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    delete fox;
+    // Cleanup physics
+    physicsCommon.destroyPhysicsWorld(physicsWorld);
+    
+    delete claw;
+    delete ground;
     glfwTerminate();
     return 0;
 }
 
 void InitializeGameObjects() {
-    fox = new GameObject("res/claw_machine.obj");
-    fox->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    // ==================== CLAW MACHINE ====================
+    claw = new GameObject("res/claw_machine.obj", physicsWorld, rp3d::BodyType::STATIC);
+    claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    claw->Translate(glm::vec3(0.0f, GROUND_HEIGHT, 0.0f));
+    
+    claw->UpdatePhysicsFromTransform();
+    
+    claw->AddMeshCollision(physicsCommon);
+    
+    // ==================== GROUND ====================
+    ground = new GameObject("res/ground.obj", physicsWorld, rp3d::BodyType::STATIC);
+    ground->Translate(glm::vec3(0.0f, -2.0f, 0.0f));
+    
+    // Add simple box collision for ground (it's just a flat plane)
+    ground->AddBoxCollision(physicsCommon, glm::vec3(10.0f, 0.5f, 10.0f));
 }
-
 
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime)
 {
     const float cameraSpeed = 5.0f; 
+    float dt = static_cast<float>(deltaTime);  // Cast once for clarity
+    
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, -cameraSpeed * deltaTime));
+        viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, -cameraSpeed * dt));
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, cameraSpeed * deltaTime));
+        viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, cameraSpeed * dt));
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(-cameraSpeed * deltaTime, 0.0f, 0.0f));
+        viewMatrix = glm::translate(viewMatrix, glm::vec3(-cameraSpeed * dt, 0.0f, 0.0f));
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        viewMatrix = glm::translate(viewMatrix, glm::vec3(cameraSpeed * deltaTime, 0.0f, 0.0f));
+        viewMatrix = glm::translate(viewMatrix, glm::vec3(cameraSpeed * dt, 0.0f, 0.0f));
 
     shader.setMat4("uV", viewMatrix);
 }
