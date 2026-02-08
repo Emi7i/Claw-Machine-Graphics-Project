@@ -56,15 +56,23 @@ public:
 
     void Rotate(float angle, glm::vec3 axis) {
         transform = glm::rotate(transform, glm::radians(angle), axis);
+        // Extract new rotation from the updated matrix
+        rotation = glm::quat_cast(transform); 
+        SyncPhysicsFromTransform();
     }
 
-    void Translate(glm::vec3 position) {
-        transform = glm::translate(transform, position);
-        this->position += position;
+    void Translate(glm::vec3 positionOffset) {
+        transform = glm::translate(transform, positionOffset);
+        // Update local position variable from matrix translation column
+        this->position = glm::vec3(transform[3]); 
+        SyncPhysicsFromTransform();
     }
 
     void Scale(glm::vec3 newScale) {
         this->scale = newScale;
+        // Update the matrix to reflect new scale
+        transform = glm::scale(transform, newScale);
+        SyncPhysicsFromTransform();
     }
 
     void Draw(Shader& shader) {
@@ -83,38 +91,40 @@ public:
         return transform;
     }
     
-    // Sync physics position to GameObject
-    void UpdateFromPhysics() {
+    void SyncPhysicsFromTransform() {
         if (!rigidBody) return;
-        
-        const rp3d::Transform& physicsTransform = rigidBody->getTransform();
-        
-        // Get position
-        const rp3d::Vector3& pos = physicsTransform.getPosition();
+
+        // Update Position and Rotation (RigidBody level)
+        rp3d::Vector3 rp3dPos(position.x, position.y, position.z);
+        rp3d::Quaternion rp3dRot(rotation.x, rotation.y, rotation.z, rotation.w);
+        rp3d::Transform physicsTransform(rp3dPos, rp3dRot);
+    
+        rigidBody->setTransform(physicsTransform);
+
+        // Update Scale (Collider level)
+        // ReactPhysics3D requires updating the scale on each collider attached to the body
+                for (uint32_t i = 0; i < rigidBody->getNbColliders(); i++) {
+            rp3d::Collider* collider = rigidBody->getCollider(i);
+        }
+    }
+    
+    void SyncTransformFromPhysics() {
+        if (!rigidBody) return;
+    
+        const rp3d::Transform& pTransform = rigidBody->getTransform();
+    
+        // Update local Pos/Rot variables
+        const rp3d::Vector3& pos = pTransform.getPosition();
         position = glm::vec3(pos.x, pos.y, pos.z);
-        
-        // Get rotation
-        const rp3d::Quaternion& rot = physicsTransform.getOrientation();
+    
+        const rp3d::Quaternion& rot = pTransform.getOrientation();
         rotation = glm::quat(rot.w, rot.x, rot.y, rot.z);
-        
-        // Update the transform matrix from physics
+    
+        // Rebuild the Model Matrix
         transform = glm::mat4(1.0f);
         transform = glm::translate(transform, position);
         transform = transform * glm::mat4_cast(rotation);
         transform = glm::scale(transform, scale);
-    }
-    
-    // Sync GameObject transform to physics (for kinematic objects)
-    void UpdatePhysicsFromTransform() {
-        if (!rigidBody) return;
-        
-        // Extract position from transform matrix
-        position = glm::vec3(transform[3]);
-        
-        rp3d::Vector3 rp3dPos(position.x, position.y, position.z);
-        rp3d::Quaternion rp3dRot(rotation.x, rotation.y, rotation.z, rotation.w);
-        rp3d::Transform physicsTransform(rp3dPos, rp3dRot);
-        rigidBody->setTransform(physicsTransform);
     }
     
     void CreatePhysicsBody(rp3d::PhysicsWorld* world, rp3d::BodyType bodyType) {

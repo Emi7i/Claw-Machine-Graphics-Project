@@ -12,6 +12,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <reactphysics3d/reactphysics3d.h>
 #include "gameobject.hpp"
+#include "collision_debug.hpp"
 
 const unsigned int wWidth = 800;
 const unsigned int wHeight = 600;
@@ -19,7 +20,9 @@ const unsigned int wHeight = 600;
 #define GROUND_HEIGHT 0.2f
 
 GameObject* claw;
+GameObject* claw_machine;
 GameObject* ground;
+GameObject* birb;
 
 // Physics objects
 rp3d::PhysicsCommon physicsCommon;
@@ -78,6 +81,15 @@ int main()
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // Debug
+    physicsWorld->setIsDebugRenderingEnabled(true);
+    rp3d::DebugRenderer& debugRenderer = physicsWorld->getDebugRenderer();
+    debugRenderer.setIsDebugItemDisplayed(rp3d::DebugRenderer::DebugItem::COLLISION_SHAPE, true);
+    debugRenderer.setIsDebugItemDisplayed(rp3d::DebugRenderer::DebugItem::CONTACT_POINT, true);
+    debugRenderer.setIsDebugItemDisplayed(rp3d::DebugRenderer::DebugItem::COLLIDER_AABB, true);
+
+    // Shader debugShader("debug_line.vert", "debug_line.frag");
 
     double timeLast = glfwGetTime();
     double deltaTime = 0.0;
@@ -99,12 +111,15 @@ int main()
         // Update physics simulation (cast to float/decimal for ReactPhysics3D)
         physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
         
-        // Update claw position from physics (if it's dynamic)
-        claw->UpdateFromPhysics();
+        // Update physics for dynamic objects
+        birb->SyncTransformFromPhysics();
 
         // Draw
+        claw_machine->Draw(unifiedShader);
         claw->Draw(unifiedShader);
         ground->Draw(unifiedShader); 
+        birb->Draw(unifiedShader);
+        
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -121,13 +136,11 @@ int main()
 
 void InitializeGameObjects() {
     // ==================== CLAW MACHINE ====================
-    claw = new GameObject("res/claw_machine.obj", physicsWorld, rp3d::BodyType::STATIC);
-    claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
-    claw->Translate(glm::vec3(0.0f, GROUND_HEIGHT, 0.0f));
+    claw_machine = new GameObject("res/claw_machine.obj", physicsWorld, rp3d::BodyType::STATIC);
+    claw_machine->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    claw_machine->Translate(glm::vec3(0.0f, GROUND_HEIGHT, 0.0f));
     
-    claw->UpdatePhysicsFromTransform();
-    
-    claw->AddMeshCollision(physicsCommon);
+    claw_machine->AddMeshCollision(physicsCommon);
     
     // ==================== GROUND ====================
     ground = new GameObject("res/ground.obj", physicsWorld, rp3d::BodyType::STATIC);
@@ -135,6 +148,20 @@ void InitializeGameObjects() {
     
     // Add simple box collision for ground (it's just a flat plane)
     ground->AddBoxCollision(physicsCommon, glm::vec3(10.0f, 0.5f, 10.0f));
+    
+    // ==================== CLAW ====================
+    claw = new GameObject("res/claw.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
+    claw->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    claw->Translate(glm::vec3(0.0f, 2.0f, 0.0f));
+    
+    claw->AddMeshCollision(physicsCommon);
+    
+    // ==================== TOYS ====================
+    birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
+    birb->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    birb->Translate(glm::vec3(0.0f, -1.0f, 0.0f));
+    
+    birb->AddBoxCollision(physicsCommon, glm::vec3(0.5f, 0.5f, 0.5f));
 }
 
 void MoveCamera(GLFWwindow* window, glm::mat4& viewMatrix, Shader shader, double deltaTime)
