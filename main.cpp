@@ -51,7 +51,12 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(wWidth, wHeight, "Physics Demo with Mesh Collision", NULL, NULL);
+    // Get primary monitor and its video mode
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+    
+    // Use monitor's native resolution
+    GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Physics Demo with Mesh Collision", monitor, NULL);
     if (window == NULL)
     {
         std::cout << "Window fail!\n" << std::endl;
@@ -80,7 +85,7 @@ int main()
     unifiedShader.setVec3("uViewPos", 0, 0, 5);
     unifiedShader.setVec3("uLightColor", 1, 1, 1);
 
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)mode->width / (float)mode->height, 0.1f, 100.0f);
     unifiedShader.setMat4("uP", projection);
     glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     unifiedShader.setMat4("uV", view);
@@ -122,8 +127,9 @@ int main()
         deltaTime = timeNow - timeLast;
         timeLast = timeNow;
 
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(window, true);
+        }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
