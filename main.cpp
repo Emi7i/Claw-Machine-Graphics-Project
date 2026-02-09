@@ -29,6 +29,7 @@ GameObject* claw_machine;
 GameObject* ground;
 GameObject* birb;
 GameObject* colliders[9];
+GameObject* trigger;
 
 // Physics objects
 rp3d::PhysicsCommon physicsCommon;
@@ -54,6 +55,7 @@ void InitializeGameObjects();
 void MoveClaw(GLFWwindow* window, double deltaTime);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+bool CheckTriggerCollision();
 
 int main()
 {
@@ -140,7 +142,7 @@ int main()
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&lastFrameTime);
     
-                        
+    bool birbPickedUp = false;
         // ------------------------- MAIN LOOP -------------------------
     while (!glfwWindowShouldClose(window))
     {
@@ -286,6 +288,12 @@ int main()
                 std::cout << "Claw returned to original position" << std::endl;
             }
         }
+        
+        if (CheckTriggerCollision() && !birbPickedUp) {
+            birb->Scale(glm::vec3(1.0f, 1.0f, 1.0f)); // Reset to original scale
+            claw->AddChild(birb);
+            birbPickedUp = true;
+        }
 
         // Update physics simulation (cast to float/decimal for ReactPhysics3D)
         physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
@@ -297,7 +305,9 @@ int main()
         claw_machine->Draw(unifiedShader);
         claw->Draw(unifiedShader);
         ground->Draw(unifiedShader); 
-        birb->Draw(unifiedShader);
+        if (!birbPickedUp) {
+            birb->Draw(unifiedShader);
+        }
 
         // Draw UI Overlay
         if (logo && logo->IsLoaded()) {
@@ -368,6 +378,14 @@ void InitializeGameObjects()
     claw->Translate(glm::vec3(0.0f, 1.0f, 0.0f));
     claw->AddBoxCollision(physicsCommon, glm::vec3(0.1f, 0.3f, 0.1f));
     
+    // ==================== TRIGGER ====================
+    trigger = new GameObject("res/trigger.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
+    //trigger->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    //trigger->Translate(glm::vec3(0.0f, 0.6f, 0.0f));
+    trigger->AddSphereCollision(physicsCommon, 0.2f);
+    
+    claw->AddChild(trigger);
+    
     // ==================== TOYS ====================
     birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
     birb->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
@@ -434,4 +452,31 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     {
         camera->ProcessMouseScroll(static_cast<float>(yoffset));
     }
+}
+
+bool CheckTriggerCollision() {
+    if (!trigger || !birb || !claw || !trigger->rigidBody || !birb->rigidBody) return false;
+    
+    // Get world position of trigger (claw position + trigger's local transform)
+    glm::mat4 triggerWorldTransform = claw->GetTransform() * trigger->GetTransform();
+    glm::vec3 triggerWorldPos = glm::vec3(triggerWorldTransform[3]);
+    
+    // Get world position of birb
+    rp3d::Vector3 birbPos = birb->rigidBody->getTransform().getPosition();
+    glm::vec3 birbWorldPos = glm::vec3(birbPos.x, birbPos.y, birbPos.z);
+    
+    // Calculate distance between centers
+    float distance = std::sqrt(
+        (triggerWorldPos.x - birbWorldPos.x) * (triggerWorldPos.x - birbWorldPos.x) +
+        (triggerWorldPos.y - birbWorldPos.y) * (triggerWorldPos.y - birbWorldPos.y) +
+        (triggerWorldPos.z - birbWorldPos.z) * (triggerWorldPos.z - birbWorldPos.z)
+    );
+    
+    // Debug output
+    std::cout << "Trigger pos: (" << triggerWorldPos.x << ", " << triggerWorldPos.y << ", " << triggerWorldPos.z << ")" << std::endl;
+    std::cout << "Birb pos: (" << birbWorldPos.x << ", " << birbWorldPos.y << ", " << birbWorldPos.z << ")" << std::endl;
+    std::cout << "Distance: " << distance << ", Threshold: " << (0.2f + 0.12f) << std::endl;
+    
+    // Check if collision occurs (trigger radius + birb approximate radius)
+    return distance < 0.2f + 0.12f; // 0.2f is trigger radius, 0.12f is birb half-extent
 }

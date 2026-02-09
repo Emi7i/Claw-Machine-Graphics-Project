@@ -249,6 +249,17 @@ public:
         );
         rigidBody->addCollider(boxShape, rp3d::Transform::identity());
     }
+    
+    void AddSphereCollision(rp3d::PhysicsCommon& physicsCommon, float radius) {
+        if (!rigidBody) {
+            std::cout << "Error: RigidBody must be created before adding sphere collision!" << std::endl;
+            return;
+        }
+    
+        rp3d::SphereShape* sphereShape = physicsCommon.createSphereShape(radius);
+        rigidBody->addCollider(sphereShape, rp3d::Transform::identity());
+    }
+
 };
 
 #endif // GAMEOBJECT_HPP
