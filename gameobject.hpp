@@ -9,15 +9,15 @@
 #include "shader.hpp"
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
 class GameObject {
 public: 
     Model* model;
     glm::mat4 transform;
-    
-private:
     std::vector<GameObject*> children;
     
+private:
     // Keep collision data alive - ReactPhysics3D stores pointers, not copies!
     std::vector<rp3d::Vector3> collisionVertices;
     std::vector<int> collisionIndices;
@@ -65,6 +65,11 @@ public:
     void AddChild(GameObject* child) {
         children.push_back(child);
     }
+    
+    void RemoveChild(GameObject* child) {
+        auto it = std::remove(children.begin(), children.end(), child);
+        children.erase(it, children.end());
+    }
 
     void Rotate(float angle, glm::vec3 axis) {
         transform = glm::rotate(transform, glm::radians(angle), axis);
@@ -82,7 +87,10 @@ public:
 
     void Scale(glm::vec3 newScale) {
         this->scale = newScale;
-        // Update the matrix to reflect new scale
+        // Rebuild the transform matrix from position, rotation, and scale
+        transform = glm::mat4(1.0f);
+        transform = glm::translate(transform, position);
+        transform = transform * glm::mat4_cast(rotation);
         transform = glm::scale(transform, newScale);
         SyncPhysicsFromTransform();
     }

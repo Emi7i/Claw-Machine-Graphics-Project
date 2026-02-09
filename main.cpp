@@ -56,6 +56,7 @@ void MoveClaw(GLFWwindow* window, double deltaTime);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 bool CheckTriggerCollision();
+void UpdateBirbPhysics();  // NEW: Update birb physics when carried
 
 int main()
 {
@@ -224,11 +225,45 @@ int main()
         if (GameStarted && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !spacePressed && !shouldMoveDown && !shouldMoveUp)
         {
             spacePressed = true;
-            shouldMoveDown = true;
-            canMoveByKeys = false;
-            originalPosition = claw->position;
-            std::cout << "Claw starting descent from position: (" << originalPosition.x << ", " << originalPosition.y << ", " << originalPosition.z << ")" << std::endl;
+    
+            if (birbPickedUp) {
+                // Drop the birb
+                claw->RemoveChild(birb);
+                
+                // Calculate birb's current world position from parent transform
+                glm::mat4 birbWorldTransform = claw->GetTransform() * birb->GetTransform();
+                glm::vec3 dropPosition = glm::vec3(birbWorldTransform[3]);
+                dropPosition.y -= 0.2f; // Drop slightly below current position
+                
+                // Reset birb's transform components to world position
+                birb->position = dropPosition;
+                birb->rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // Identity rotation
+                birb->scale = glm::vec3(0.4f, 0.4f, 0.4f);
+                
+                // Rebuild transform matrix
+                birb->transform = glm::mat4(1.0f);
+                birb->transform = glm::translate(birb->transform, birb->position);
+                birb->transform = glm::scale(birb->transform, birb->scale);
+                
+                // Re-enable dynamic physics so it falls
+                birb->rigidBody->setType(rp3d::BodyType::DYNAMIC);
+                birb->SyncPhysicsFromTransform();
+                
+                birbPickedUp = false;
+        
+                // End game
+                GameStarted = false;
+                std::cout << "Birb dropped! Game ended." << std::endl;
+            } else {
+                // Normal claw descent
+                shouldMoveDown = true;
+                canMoveByKeys = false;
+                originalPosition = claw->position;
+                std::cout << "Claw starting descent from position: (" << originalPosition.x << ", " << originalPosition.y << ", " << originalPosition.z << ")" << std::endl;
+            }
         }
+
+        // Move this outside the GameStarted condition - ALWAYS reset spacePressed when released
         if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
         {
             spacePressed = false;
@@ -289,25 +324,39 @@ int main()
             }
         }
         
+        // Check for trigger collision and pick up birb
         if (CheckTriggerCollision() && !birbPickedUp) {
-            birb->Scale(glm::vec3(1.0f, 1.0f, 1.0f)); // Reset to original scale
+            // Reset birb scale to original (this was the working approach)
+            birb->Scale(glm::vec3(1.0f, 1.0f, 1.0f));
+    
             claw->AddChild(birb);
+    
+            // Make birb kinematic so physics doesn't interfere while carried
+            birb->rigidBody->setType(rp3d::BodyType::KINEMATIC);
+    
             birbPickedUp = true;
+            std::cout << "Birb picked up!" << std::endl;
         }
+
+        // Update birb physics to follow claw while picked up
+        if (birbPickedUp) {
+            UpdateBirbPhysics();
+        }
+        
 
         // Update physics simulation (cast to float/decimal for ReactPhysics3D)
         physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
         
-        // Update physics for dynamic objects
-        birb->SyncTransformFromPhysics();
+        // Update physics for dynamic objects (only when not picked up)
+        if (!birbPickedUp) {
+            birb->SyncTransformFromPhysics();
+            birb->Draw(unifiedShader);
+        }
 
         // Draw
         claw_machine->Draw(unifiedShader);
         claw->Draw(unifiedShader);
         ground->Draw(unifiedShader); 
-        if (!birbPickedUp) {
-            birb->Draw(unifiedShader);
-        }
 
         // Draw UI Overlay
         if (logo && logo->IsLoaded()) {
@@ -380,8 +429,6 @@ void InitializeGameObjects()
     
     // ==================== TRIGGER ====================
     trigger = new GameObject("res/trigger.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
-    //trigger->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
-    //trigger->Translate(glm::vec3(0.0f, 0.6f, 0.0f));
     trigger->AddSphereCollision(physicsCommon, 0.2f);
     
     claw->AddChild(trigger);
@@ -402,7 +449,7 @@ void MoveClaw(GLFWwindow* window, double deltaTime)
     
     // Store current position to restore if collision occurs
     glm::vec3 oldPosition = claw->position;
-            glm::mat4 oldTransform = claw->GetTransform();
+    glm::mat4 oldTransform = claw->GetTransform();
                     
     // Calculate potential new position
     glm::vec3 movement(0.0f);
@@ -472,11 +519,24 @@ bool CheckTriggerCollision() {
         (triggerWorldPos.z - birbWorldPos.z) * (triggerWorldPos.z - birbWorldPos.z)
     );
     
-    // Debug output
-    std::cout << "Trigger pos: (" << triggerWorldPos.x << ", " << triggerWorldPos.y << ", " << triggerWorldPos.z << ")" << std::endl;
-    std::cout << "Birb pos: (" << birbWorldPos.x << ", " << birbWorldPos.y << ", " << birbWorldPos.z << ")" << std::endl;
-    std::cout << "Distance: " << distance << ", Threshold: " << (0.2f + 0.12f) << std::endl;
-    
     // Check if collision occurs (trigger radius + birb approximate radius)
     return distance < 0.2f + 0.12f; // 0.2f is trigger radius, 0.12f is birb half-extent
+}
+
+void UpdateBirbPhysics() {
+    if (!birb || !claw) return;
+    
+    // Calculate birb's world transform from parent-child hierarchy
+    glm::mat4 birbWorldTransform = claw->GetTransform() * birb->GetTransform();
+    
+    // Extract position and rotation from world transform
+    glm::vec3 worldPosition = glm::vec3(birbWorldTransform[3]);
+    glm::quat worldRotation = glm::quat_cast(birbWorldTransform);
+    
+    // Update birb's physics body to match visual position
+    rp3d::Vector3 rp3dPos(worldPosition.x, worldPosition.y, worldPosition.z);
+    rp3d::Quaternion rp3dRot(worldRotation.x, worldRotation.y, worldRotation.z, worldRotation.w);
+    rp3d::Transform physicsTransform(rp3dPos, rp3dRot);
+    
+    birb->rigidBody->setTransform(physicsTransform);
 }
