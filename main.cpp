@@ -8,6 +8,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <set>
 #include <windows.h>
 
 #include <GL/glew.h>
@@ -31,10 +32,12 @@ const unsigned int wHeight = 600;
 GameObject* claw;
 GameObject* claw_machine;
 GameObject* ground;
-GameObject* birb;
 GameObject* colliders[9];
 GameObject* trigger;
 GameObject* lightCube;
+
+std::vector<GameObject*> birbs; 
+std::set<GameObject*> collectedBirbs;
 
 // Physics objects
 rp3d::PhysicsCommon physicsCommon;
@@ -45,7 +48,7 @@ Camera* camera = nullptr;
 
 // UI
 Logo* logo = nullptr;
-Logo* birbIcon = nullptr; // NEW: Birb icon for bottom left corner
+Logo* birbIcon = nullptr;
 
 // Game state
 bool GameStarted = false;
@@ -59,16 +62,16 @@ bool shouldMoveUp = false;
 bool hasToy = false;
 glm::vec3 originalPosition;
 bool canMoveByKeys = true;
-bool birbPickedUp = false;
-bool birbCollected = false; // NEW: Track if birb was collected directly
+GameObject* pickedUpBirb = nullptr; // Track which birb is picked up
+int birbsCollected = 0; // Track how many birbs collected
 
 void InitializeGameObjects();
 void MoveClaw(GLFWwindow* window, double deltaTime);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-bool CheckTriggerCollision();
-bool CanDirectPickupBirb(); // NEW: Check if player can directly pick up birb
-void UpdateBirbPhysics();  // NEW: Update birb physics when carried
+GameObject* CheckTriggerCollision(); // Returns the birb that collided
+GameObject* CanDirectPickupBirb(); // Returns the birb that can be picked up
+void UpdateBirbPhysics();
 
 int main()
 {
@@ -128,7 +131,7 @@ int main()
     unifiedShader.setVec3("uLightPos", 0, 1, 3);
     unifiedShader.setVec3("uViewPos", camera->position.x, camera->position.y, camera->position.z);
     unifiedShader.setVec3("uLightColor", 1, 1, 1);
-    unifiedShader.setVec3("uAmbientColor", 1, 1, 1); // Set ambient to white
+    unifiedShader.setVec3("uAmbientColor", 1, 1, 1);
 
     glm::mat4 projection = glm::perspective(glm::radians(camera->zoom), (float)mode->width / (float)mode->height, 0.1f, 100.0f);
     unifiedShader.setMat4("uP", projection);
@@ -144,7 +147,6 @@ int main()
 
     // --- BIRB ICON SETUP (Bottom Left Corner) ---
     birbIcon = new Logo();
-    // Position in bottom-left: left=-0.95, bottom=-0.9, right=-0.7, top=-0.7
     birbIcon->Initialize("birb.png", "res", -0.95f, -0.9f, -0.7f, -0.65f);
 
     // Disable vsync to allow custom frame rate
@@ -184,13 +186,15 @@ int main()
             ePressed = true;
             
             // Check for direct birb pickup first
-            if (CanDirectPickupBirb()) {
+            GameObject* directPickupBirb = CanDirectPickupBirb();
+            if (directPickupBirb) {
                 // Pick up birb directly
-                birbPickedUp = true;
-                birbCollected = true;
-                birb->rigidBody->setType(rp3d::BodyType::KINEMATIC);
-                
-                std::cout << "Birb picked up directly!" << std::endl;
+                pickedUpBirb = directPickupBirb;
+                pickedUpBirb->rigidBody->setType(rp3d::BodyType::KINEMATIC);
+                collectedBirbs.insert(directPickupBirb); // ADD THIS LINE
+                birbsCollected++;
+    
+                std::cout << "Birb picked up directly! Total collected: " << birbsCollected << std::endl;
             }
             else if (camera->IsLookingAt(claw_machine->position)) {
                 GameStarted = true;
@@ -209,7 +213,7 @@ int main()
         }
 
         // Arrow keys for orbital rotation around claw machine
-        const float orbitSpeed = 45.0f; // degrees per second
+        const float orbitSpeed = 45.0f;
         float horizontalOrbit = 0.0f;
         float verticalOrbit = 0.0f;
 
@@ -246,9 +250,9 @@ int main()
 
         // Update light color based on game state
         if (GameStarted) {
-            unifiedShader.setVec3("uLightColor", 0.0f, 1.0f, 0.0f); // Green when game started
+            unifiedShader.setVec3("uLightColor", 0.0f, 1.0f, 0.0f);
         } else {
-            unifiedShader.setVec3("uLightColor", 1.0f, 0.0f, 0.0f); // Red when not started
+            unifiedShader.setVec3("uLightColor", 1.0f, 0.2f, 0.6f); // Pink
         }
 
         // Update view matrix
@@ -267,30 +271,30 @@ int main()
         {
             spacePressed = true;
     
-            if (birbPickedUp) {
+            if (pickedUpBirb) {
                 // Drop the birb
-                claw->RemoveChild(birb);
+                claw->RemoveChild(pickedUpBirb);
                 
                 // Calculate birb's current world position from parent transform
-                glm::mat4 birbWorldTransform = claw->GetTransform() * birb->GetTransform();
+                glm::mat4 birbWorldTransform = claw->GetTransform() * pickedUpBirb->GetTransform();
                 glm::vec3 dropPosition = glm::vec3(birbWorldTransform[3]);
-                dropPosition.y -= 0.2f; // Drop slightly below current position
+                dropPosition.y -= 0.2f;
                 
                 // Reset birb's transform components to world position
-                birb->position = dropPosition;
-                birb->rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // Identity rotation
-                birb->scale = glm::vec3(0.4f, 0.4f, 0.4f);
+                pickedUpBirb->position = dropPosition;
+                pickedUpBirb->rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+                pickedUpBirb->scale = glm::vec3(0.4f, 0.4f, 0.4f);
                 
                 // Rebuild transform matrix
-                birb->transform = glm::mat4(1.0f);
-                birb->transform = glm::translate(birb->transform, birb->position);
-                birb->transform = glm::scale(birb->transform, birb->scale);
+                pickedUpBirb->transform = glm::mat4(1.0f);
+                pickedUpBirb->transform = glm::translate(pickedUpBirb->transform, pickedUpBirb->position);
+                pickedUpBirb->transform = glm::scale(pickedUpBirb->transform, pickedUpBirb->scale);
                 
                 // Re-enable dynamic physics so it falls
-                birb->rigidBody->setType(rp3d::BodyType::DYNAMIC);
-                birb->SyncPhysicsFromTransform();
+                pickedUpBirb->rigidBody->setType(rp3d::BodyType::DYNAMIC);
+                pickedUpBirb->SyncPhysicsFromTransform();
                 
-                birbPickedUp = false;
+                pickedUpBirb = nullptr;
         
                 // End game
                 GameStarted = false;
@@ -304,7 +308,6 @@ int main()
             }
         }
 
-        // Move this outside GameStarted condition - ALWAYS reset spacePressed when released
         if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_RELEASE)
         {
             spacePressed = false;
@@ -321,7 +324,7 @@ int main()
             claw->Translate(movement);
             
             // Update birb physics if it's being carried
-            if (birbPickedUp) {
+            if (pickedUpBirb) {
                 UpdateBirbPhysics();
             }
             
@@ -352,12 +355,12 @@ int main()
                 glm::vec3 movement = direction * ascentSpeed * static_cast<float>(deltaTime);
                 if (glm::length(movement) > distance)
                 {
-                    movement = direction * distance; // Don't overshoot
+                    movement = direction * distance;
                 }
                 claw->Translate(movement);
                 
                 // Update birb physics if it's being carried
-                if (birbPickedUp) {
+                if (pickedUpBirb) {
                     UpdateBirbPhysics();
                 }
             }
@@ -369,7 +372,7 @@ int main()
                 claw->SyncPhysicsFromTransform();
                 
                 // Update birb one last time at final position
-                if (birbPickedUp) {
+                if (pickedUpBirb) {
                     UpdateBirbPhysics();
                 }
                 
@@ -378,7 +381,7 @@ int main()
                 std::cout << "Claw returned to original position" << std::endl;
                 
                 // End game if birb was not picked up after one cycle
-                if (!birbPickedUp) {
+                if (!pickedUpBirb) {
                     GameStarted = false;
                     std::cout << "Game ended - birb not picked up" << std::endl;
                 }
@@ -386,30 +389,33 @@ int main()
         }
         
         // Check for trigger collision and pick up birb
-        if (CheckTriggerCollision() && !birbPickedUp) {
-            // Reset birb scale to original (this was working approach)
-            birb->Scale(glm::vec3(1.0f, 1.0f, 1.0f));
+        GameObject* collidedBirb = CheckTriggerCollision();
+        if (collidedBirb && !pickedUpBirb) {
+            // Reset birb scale to original
+            collidedBirb->Scale(glm::vec3(1.0f, 1.0f, 1.0f));
     
-            claw->AddChild(birb);
+            claw->AddChild(collidedBirb);
      
             // Make birb kinematic so physics doesn't interfere while carried
-            birb->rigidBody->setType(rp3d::BodyType::KINEMATIC);
+            collidedBirb->rigidBody->setType(rp3d::BodyType::KINEMATIC);
      
-            birbPickedUp = true;
+            pickedUpBirb = collidedBirb;
             std::cout << "Birb picked up!" << std::endl;
         }
         
         // Update birb physics to follow claw while picked up (for horizontal movement)
-        if (birbPickedUp && canMoveByKeys) {
+        if (pickedUpBirb && canMoveByKeys) {
             UpdateBirbPhysics();
         }
         
-        // Update physics simulation (cast to float/decimal for ReactPhysics3D)
+        // Update physics simulation
         physicsWorld->update(static_cast<rp3d::decimal>(deltaTime));
         
-        // Update physics for dynamic objects (only when not picked up)
-        if (!birbPickedUp) {
-            birb->SyncTransformFromPhysics();
+        // Update physics for all dynamic birbs (only when not picked up)
+        for (GameObject* birb : birbs) {
+            if (birb != pickedUpBirb && collectedBirbs.find(birb) == collectedBirbs.end()) {
+                birb->SyncTransformFromPhysics();
+            }
         }
         
         // Draw
@@ -417,32 +423,37 @@ int main()
         claw->Draw(unifiedShader);
         ground->Draw(unifiedShader); 
         
-        // Only draw birb if it hasn't been picked up directly
-        if (!birbPickedUp && !birbCollected) {
-            birb->Draw(unifiedShader);
+        // Draw all birbs that aren't picked up or collected
+        for (GameObject* birb : birbs) {
+            // Skip if birb has been collected
+            if (collectedBirbs.find(birb) != collectedBirbs.end()) {
+                continue;
+            }
+    
+            // Check if this birb is being carried by the claw
+            bool isBeingCarried = (birb == pickedUpBirb && claw->IsChild(birb));
+    
+            // Only draw if not being carried
+            if (!isBeingCarried) {
+                birb->Draw(unifiedShader);
+            }
         }
 
-        // Draw UI Overlay (always on top, depth test disabled in Logo::Render)
-        // Draw main logo (top-right)
+        // Draw UI Overlay
         if (logo && logo->IsLoaded()) {
             logo->Render();
-        }
-        
-        // Draw birb icon (bottom-left) if collected
-        if (birbCollected && birbIcon && birbIcon->IsLoaded()) {
-            birbIcon->Render();
         }
         
         // Switch back to unified shader for 3D rendering
         unifiedShader.use();
         
+        
         // Draw light cube with color based on game state
         if (GameStarted) {
-            unifiedShader.setVec3("uDiffuseColor", 0.0f, 1.0f, 0.0f); // Green
+            unifiedShader.setVec3("uDiffuseColor", 0.0f, 1.0f, 0.0f);
         } else {
-            unifiedShader.setVec3("uDiffuseColor", 1.0f, 0.0f, 0.0f); // Red
+            unifiedShader.setVec3("uDiffuseColor", 1.0f, 0.2f, 0.6f); // Pink
         }
-        //lightCube->Draw(unifiedShader);
         
         // Reset diffuse color to white for other objects
         unifiedShader.setVec3("uDiffuseColor", 1.0f, 1.0f, 1.0f);
@@ -450,24 +461,20 @@ int main()
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        // High-precision frame limiter using QueryPerformanceCounter
+        // High-precision frame limiter
         LARGE_INTEGER currentTime;
         QueryPerformanceCounter(&currentTime);
         
-        // Calculate elapsed time in seconds
         double elapsed = static_cast<double>(currentTime.QuadPart - lastFrameTime.QuadPart) / frequency.QuadPart;
         
-        // If we haven't reached target frame time, busy-wait for precision
         if (elapsed < targetFrameTime)
         {
             LARGE_INTEGER targetTime;
             targetTime.QuadPart = lastFrameTime.QuadPart + static_cast<long long>(targetFrameTime * frequency.QuadPart);
             
-            // Busy-wait until we reach the target time
             while (currentTime.QuadPart < targetTime.QuadPart)
             {
                 QueryPerformanceCounter(&currentTime);
-                // Optional: Yield CPU occasionally to prevent 100% usage
                 if ((currentTime.QuadPart % 1000) == 0)
                 {
                     std::this_thread::yield();
@@ -482,11 +489,14 @@ int main()
     physicsCommon.destroyPhysicsWorld(physicsWorld);
     delete camera;
     delete logo;
-    delete birbIcon; // NEW: Cleanup birb icon
+    delete birbIcon;
     delete claw;
     delete claw_machine;
     delete ground;
-    delete birb;
+    for (GameObject* birb : birbs) {
+        delete birb;
+    }
+    birbs.clear();
     delete lightCube;
     glfwTerminate();
     return 0;
@@ -515,19 +525,27 @@ void InitializeGameObjects()
     trigger = new GameObject("res/trigger.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
     trigger->AddSphereCollision(physicsCommon, 0.2f);
     
-    //claw->AddChild(trigger);
+    claw->AddChild(trigger);
     
-    // ==================== TOYS ====================
-    birb = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
-    birb->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
-    birb->Translate(glm::vec3(0.0f, -1.0f, 0.0f));
-    birb->AddBoxCollision(physicsCommon, glm::vec3(0.12f, 0.12f, 0.12f));
+    // ==================== BIRBS (Multiple) ====================
+    // Birb 1
+    GameObject* birb1 = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
+    birb1->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    birb1->Translate(glm::vec3(0.0f, -1.0f, 0.0f));
+    birb1->AddBoxCollision(physicsCommon, glm::vec3(0.12f, 0.12f, 0.12f));
+    birbs.push_back(birb1);
+    
+    // Birb 2
+    GameObject* birb2 = new GameObject("res/birb.obj", physicsWorld, rp3d::BodyType::DYNAMIC);
+    birb2->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    birb2->Translate(glm::vec3(0.5f, -1.0f, 0.5f)); // Different position
+    birb2->AddBoxCollision(physicsCommon, glm::vec3(0.12f, 0.12f, 0.12f));
+    birbs.push_back(birb2);
     
     // ==================== LIGHT CUBE ====================
     lightCube = new GameObject("res/trigger.obj", physicsWorld, rp3d::BodyType::STATIC);
     lightCube->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
-    lightCube->Translate(glm::vec3(2.0f, 1.0f, 0.0f)); // Position it to the right side
-    // No collision needed for visual indicator
+    lightCube->Translate(glm::vec3(2.0f, 1.0f, 0.0f));
 }
 
 void MoveClaw(GLFWwindow* window, double deltaTime)
@@ -537,11 +555,9 @@ void MoveClaw(GLFWwindow* window, double deltaTime)
     const float clawSpeed = 3.0f;
     float dt = static_cast<float>(deltaTime);
     
-    // Store current position to restore if collision occurs
     glm::vec3 oldPosition = claw->position;
     glm::mat4 oldTransform = claw->GetTransform();
                     
-    // Calculate potential new position
     glm::vec3 movement(0.0f);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
     {
@@ -560,20 +576,16 @@ void MoveClaw(GLFWwindow* window, double deltaTime)
         movement.x += clawSpeed * dt;
     }
     
-    // Apply movement
     claw->Translate(movement);
     
-    // Manually test overlap (kinematic vs static doesn't trigger callbacks!)
     if (physicsWorld->testOverlap(claw->rigidBody, claw_machine->rigidBody))
     {
-        // Restore EVERYTHING - position, transform, and physics
         claw->position = oldPosition;
         claw->transform = oldTransform;
         claw->SyncPhysicsFromTransform();
     }
 }
 
-// Mouse callback
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
     if (camera)
@@ -582,7 +594,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     }
 }
 
-// Scroll callback
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     if (camera)
@@ -591,53 +602,68 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
     }
 }
 
-bool CheckTriggerCollision()
+GameObject* CheckTriggerCollision()
 {
-    if (!trigger || !birb || !claw || !trigger->rigidBody || !birb->rigidBody) return false;
+    if (!trigger || !claw || !trigger->rigidBody) return nullptr;
     
-    // Get world position of trigger (claw position + trigger's local transform)
+    // Get world position of trigger
     glm::mat4 triggerWorldTransform = claw->GetTransform() * trigger->GetTransform();
     glm::vec3 triggerWorldPos = glm::vec3(triggerWorldTransform[3]);
     
-    // Get world position of birb
-    rp3d::Vector3 birbPos = birb->rigidBody->getTransform().getPosition();
-    glm::vec3 birbWorldPos = glm::vec3(birbPos.x, birbPos.y, birbPos.z);
+    // Check collision with all birbs
+    for (GameObject* birb : birbs) {
+        if (!birb || !birb->rigidBody) continue;
+        
+        // Get world position of birb
+        rp3d::Vector3 birbPos = birb->rigidBody->getTransform().getPosition();
+        glm::vec3 birbWorldPos = glm::vec3(birbPos.x, birbPos.y, birbPos.z);
+        
+        // Calculate distance between centers
+        float distance = glm::distance(triggerWorldPos, birbWorldPos);
+        
+        // Check if collision occurs
+        if (distance < 0.2f + 0.12f) {
+            return birb; // Return the first birb that collides
+        }
+    }
     
-    // Calculate distance between centers
-    float distance = std::sqrt(
-        (triggerWorldPos.x - birbWorldPos.x) * (triggerWorldPos.x - birbWorldPos.x) +
-        (triggerWorldPos.y - birbWorldPos.y) * (triggerWorldPos.y - birbWorldPos.y) +
-        (triggerWorldPos.z - birbWorldPos.z) * (triggerWorldPos.z - birbWorldPos.z)
-    );
-    
-    // Check if collision occurs (trigger radius + birb approximate radius)
-    return distance < 0.2f + 0.12f; // 0.2f is trigger radius, 0.12f is birb half-extent
+    return nullptr;
 }
 
-bool CanDirectPickupBirb()
+GameObject* CanDirectPickupBirb()
 {
-    if (!birb || !camera) return false;
+    if (!camera) return nullptr;
     
-    // Get camera position and birb position
     glm::vec3 cameraPos = camera->position;
-    glm::vec3 birbWorldPos = glm::vec3(birb->rigidBody->getTransform().getPosition().x, 
-                                             birb->rigidBody->getTransform().getPosition().y, 
-                                             birb->rigidBody->getTransform().getPosition().z);
     
-    // Check if birb is picked up already
-    if (birbPickedUp) return false;
+    // Check all birbs for proximity
+    for (GameObject* birb : birbs) {
+        if (!birb || !birb->rigidBody) continue;
+        
+        // Skip if this birb is already picked up
+        if (birb == pickedUpBirb) continue;
+        
+        glm::vec3 birbWorldPos = glm::vec3(
+            birb->rigidBody->getTransform().getPosition().x,
+            birb->rigidBody->getTransform().getPosition().y,
+            birb->rigidBody->getTransform().getPosition().z
+        );
+        
+        float distance = glm::distance(cameraPos, birbWorldPos);
+        if (distance < 2.0f) {
+            return birb; // Return the first birb within range
+        }
+    }
     
-    // Simple distance check for now (you can add raycasting later for better accuracy)
-    float distance = glm::distance(cameraPos, birbWorldPos);
-    return distance < 2.0f; // Pick up if within 2 units
+    return nullptr;
 }
 
 void UpdateBirbPhysics()
 {
-    if (!birb || !claw) return;
+    if (!pickedUpBirb || !claw) return;
     
     // Calculate birb's world transform from parent-child hierarchy
-    glm::mat4 birbWorldTransform = claw->GetTransform() * birb->GetTransform();
+    glm::mat4 birbWorldTransform = claw->GetTransform() * pickedUpBirb->GetTransform();
     
     // Extract position and rotation from world transform
     glm::vec3 worldPosition = glm::vec3(birbWorldTransform[3]);
@@ -648,5 +674,5 @@ void UpdateBirbPhysics()
     rp3d::Quaternion rp3dRot(worldRotation.x, worldRotation.y, worldRotation.z, worldRotation.w);
     rp3d::Transform physicsTransform(rp3dPos, rp3dRot);
     
-    birb->rigidBody->setTransform(physicsTransform);
+    pickedUpBirb->rigidBody->setTransform(physicsTransform);
 }

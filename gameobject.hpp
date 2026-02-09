@@ -147,6 +147,11 @@ public:
         transform = glm::scale(transform, scale);
     }
     
+    // Check if a GameObject is a child of this GameObject
+    bool IsChild(GameObject* obj) const {
+        return std::find(children.begin(), children.end(), obj) != children.end();
+    }
+    
     void CreatePhysicsBody(rp3d::PhysicsWorld* world, rp3d::BodyType bodyType) {
         rp3d::Vector3 pos(position.x, position.y, position.z);
         rp3d::Quaternion rot(rotation.x, rotation.y, rotation.z, rotation.w);
