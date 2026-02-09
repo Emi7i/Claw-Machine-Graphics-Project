@@ -221,12 +221,10 @@ int main()
             glEnable(GL_CULL_FACE);
             glCullFace(GL_BACK);
             glFrontFace(GL_CW);
-            std::cout << "Backface culling enabled" << std::endl;
         }
         else
         {
             glDisable(GL_CULL_FACE);
-            std::cout << "Backface culling disabled" << std::endl;
         }
 
         // Check for E key to start game when looking at claw machine
@@ -354,7 +352,6 @@ int main()
                 shouldMoveDown = true;
                 canMoveByKeys = false;
                 originalPosition = claw->position;
-                std::cout << "Claw starting descent from position: (" << originalPosition.x << ", " << originalPosition.y << ", " << originalPosition.z << ")" << std::endl;
             }
         }
 
@@ -389,7 +386,6 @@ int main()
                 
                 shouldMoveDown = false;
                 shouldMoveUp = true;
-                std::cout << "Claw hit collision, starting ascent" << std::endl;
             }
         }
     
@@ -428,7 +424,6 @@ int main()
                 
                 shouldMoveUp = false;
                 canMoveByKeys = true;
-                std::cout << "Claw returned to original position" << std::endl;
                 
                 // End game if birb was not picked up after one cycle
                 if (!pickedUpBirb) {
@@ -436,6 +431,19 @@ int main()
                     std::cout << "Game ended - birb not picked up" << std::endl;
                 }
             }
+        }
+        
+        // Toggle crouch with 'C' key
+        static bool cPressed = false;
+        if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS && !cPressed)
+        {
+            cPressed = true;
+            camera->ToggleCrouch();
+            std::cout << (camera->isCrouching ? "Crouching" : "Standing") << std::endl;
+        }
+        if (glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE)
+        {
+            cPressed = false;
         }
         
         // Check for trigger collision and pick up birb

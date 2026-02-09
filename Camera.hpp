@@ -26,6 +26,11 @@ public:
     bool firstMouse;
     float lastX;
     float lastY;
+    
+    // Crouch state
+    bool isCrouching;
+    float standHeight;
+    float crouchHeight;
 
     // Constructor
     Camera(glm::vec3 position = glm::vec3(0.0f, 0.0f, 5.0f),
@@ -33,12 +38,15 @@ public:
            float yaw = -90.0f,
            float pitch = 0.0f)
         : front(glm::vec3(0.0f, 0.0f, -1.0f)),
-          movementSpeed(5.0f),
-          mouseSensitivity(0.1f),
-          zoom(45.0f),
-          firstMouse(true),
-          lastX(400.0f),
-          lastY(300.0f)
+        movementSpeed(5.0f),
+        mouseSensitivity(0.1f),
+        zoom(45.0f),
+        firstMouse(true),
+        lastX(400.0f),
+        lastY(300.0f),
+        isCrouching(false),
+        standHeight(position.y), 
+        crouchHeight(position.y - 1.0f)
     {
         this->position = position;
         this->worldUp = up;
@@ -58,20 +66,35 @@ public:
     {
         float velocity = movementSpeed * deltaTime;
 
+        // Create horizontal front vector (ignore Y component)
+        glm::vec3 horizontalFront = front;
+        horizontalFront.y = 0.0f;
+        horizontalFront = glm::normalize(horizontalFront);
+
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-            position += front * velocity;
+            position += horizontalFront * velocity;
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            position -= front * velocity;
+            position -= horizontalFront * velocity;
         if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
             position -= right * velocity;
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             position += right * velocity;
-        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-            position += worldUp * velocity;
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-            position -= worldUp * velocity;
     }
-
+    
+    // Toggle crouch
+    void ToggleCrouch()
+    {
+        isCrouching = !isCrouching;
+        if (isCrouching)
+        {
+            position.y = crouchHeight;
+        }
+        else
+        {
+            position.y = standHeight;
+        }
+    }
+    
     // Process mouse movement
     void ProcessMouseMovement(float xpos, float ypos, bool constrainPitch = true)
     {
