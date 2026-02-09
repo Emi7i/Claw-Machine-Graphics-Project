@@ -2,11 +2,6 @@
 reactphysics3d/
 stb_image.h
 
-# Model files
-res/
-.obj
-.mtl
-
 # Build files
 build/
 bin/

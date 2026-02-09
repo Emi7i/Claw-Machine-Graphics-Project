@@ -1,0 +1,12 @@
+# Blender 4.5.2 LTS MTL File: 'ground.blend'
+# www.blender.org
+
+newmtl Material.001
+Ns 594.300781
+Ka 0.472727 0.472727 0.472727
+Kd 0.327760 0.029217 0.374041
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 4.100000
+d 1.000000
+illum 3

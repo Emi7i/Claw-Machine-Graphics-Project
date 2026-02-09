@@ -1,0 +1,12 @@
+# Blender 4.5.2 LTS MTL File: 'claw.blend'
+# www.blender.org
+
+newmtl Metalic
+Ns 657.573486
+Ka 0.821818 0.821818 0.821818
+Kd 0.196461 0.185379 0.191560
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 10.900000
+d 1.000000
+illum 3

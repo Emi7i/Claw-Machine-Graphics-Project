@@ -34,6 +34,7 @@ GameObject* ground;
 GameObject* birb;
 GameObject* colliders[9];
 GameObject* trigger;
+GameObject* lightCube;
 
 // Physics objects
 rp3d::PhysicsCommon physicsCommon;
@@ -127,6 +128,7 @@ int main()
     unifiedShader.setVec3("uLightPos", 0, 1, 3);
     unifiedShader.setVec3("uViewPos", camera->position.x, camera->position.y, camera->position.z);
     unifiedShader.setVec3("uLightColor", 1, 1, 1);
+    unifiedShader.setVec3("uAmbientColor", 1, 1, 1); // Set ambient to white
 
     glm::mat4 projection = glm::perspective(glm::radians(camera->zoom), (float)mode->width / (float)mode->height, 0.1f, 100.0f);
     unifiedShader.setMat4("uP", projection);
@@ -235,6 +237,19 @@ int main()
 
         // Update view position for lighting
         unifiedShader.setVec3("uViewPos", camera->position.x, camera->position.y, camera->position.z);
+
+        // Update light position to light cube location
+        unifiedShader.setVec3("uLightPos", 0.0f, 5.0f, 0.0f);
+        
+        // Set light type to point (0) for top light
+        unifiedShader.setInt("uLightType", 0);
+
+        // Update light color based on game state
+        if (GameStarted) {
+            unifiedShader.setVec3("uLightColor", 0.0f, 1.0f, 0.0f); // Green when game started
+        } else {
+            unifiedShader.setVec3("uLightColor", 1.0f, 0.0f, 0.0f); // Red when not started
+        }
 
         // Update view matrix
         glm::mat4 view = camera->GetViewMatrix();
@@ -420,6 +435,17 @@ int main()
         
         // Switch back to unified shader for 3D rendering
         unifiedShader.use();
+        
+        // Draw light cube with color based on game state
+        if (GameStarted) {
+            unifiedShader.setVec3("uDiffuseColor", 0.0f, 1.0f, 0.0f); // Green
+        } else {
+            unifiedShader.setVec3("uDiffuseColor", 1.0f, 0.0f, 0.0f); // Red
+        }
+        //lightCube->Draw(unifiedShader);
+        
+        // Reset diffuse color to white for other objects
+        unifiedShader.setVec3("uDiffuseColor", 1.0f, 1.0f, 1.0f);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -461,6 +487,7 @@ int main()
     delete claw_machine;
     delete ground;
     delete birb;
+    delete lightCube;
     glfwTerminate();
     return 0;
 }
@@ -495,6 +522,12 @@ void InitializeGameObjects()
     birb->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
     birb->Translate(glm::vec3(0.0f, -1.0f, 0.0f));
     birb->AddBoxCollision(physicsCommon, glm::vec3(0.12f, 0.12f, 0.12f));
+    
+    // ==================== LIGHT CUBE ====================
+    lightCube = new GameObject("res/trigger.obj", physicsWorld, rp3d::BodyType::STATIC);
+    lightCube->Scale(glm::vec3(0.4f, 0.4f, 0.4f));
+    lightCube->Translate(glm::vec3(2.0f, 1.0f, 0.0f)); // Position it to the right side
+    // No collision needed for visual indicator
 }
 
 void MoveClaw(GLFWwindow* window, double deltaTime)
