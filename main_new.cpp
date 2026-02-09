@@ -44,13 +44,10 @@ Camera* camera = nullptr;
 
 // UI
 Logo* logo = nullptr;
-Logo* birbIcon = nullptr; // NEW: Birb icon for bottom left corner
+Logo* birbIcon = nullptr; // NEW: Birb icon for UI
 
 // Game state
 bool GameStarted = false;
-
-// Claw movement speed
-float clawSpeed = 5.0f;
 
 // Claw movement state
 bool shouldMoveDown = false;
@@ -140,10 +137,9 @@ int main()
     logo = new Logo();
     logo->Initialize("Logo.png", "res");
 
-    // --- BIRB ICON SETUP (Bottom Left Corner) ---
+    // --- BIRB ICON SETUP ---
     birbIcon = new Logo();
-    // Position in bottom-left: left=-0.95, bottom=-0.9, right=-0.7, top=-0.7
-    birbIcon->Initialize("birb.png", "res", -0.95f, -0.9f, -0.7f, -0.65f);
+    birbIcon->Initialize("birb.png", "res");
 
     // Disable vsync to allow custom frame rate
     glfwSwapInterval(0);
@@ -255,28 +251,23 @@ int main()
             if (birbPickedUp) {
                 // Drop the birb
                 claw->RemoveChild(birb);
-                
-                // Calculate birb's current world position from parent transform
-                glm::mat4 birbWorldTransform = claw->GetTransform() * birb->GetTransform();
-                glm::vec3 dropPosition = glm::vec3(birbWorldTransform[3]);
-                dropPosition.y -= 0.2f; // Drop slightly below current position
-                
-                // Reset birb's transform components to world position
-                birb->position = dropPosition;
-                birb->rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // Identity rotation
-                birb->scale = glm::vec3(0.4f, 0.4f, 0.4f);
-                
-                // Rebuild transform matrix
-                birb->transform = glm::mat4(1.0f);
-                birb->transform = glm::translate(birb->transform, birb->position);
-                birb->transform = glm::scale(birb->transform, birb->scale);
-                
-                // Re-enable dynamic physics so it falls
-                birb->rigidBody->setType(rp3d::BodyType::DYNAMIC);
-                birb->SyncPhysicsFromTransform();
-                
                 birbPickedUp = false;
-        
+    
+                // Move birb slightly below its current position
+                glm::mat4 clawTransform = claw->GetTransform();
+                glm::vec3 clawWorldPos = glm::vec3(clawTransform[3]); // Get claw's world position
+    
+                // Rebuild birb's transform at claw's position
+                birb->transform = glm::mat4(1.0f); // Reset to identity
+                birb->transform = glm::translate(birb->transform, clawWorldPos); // Set to claw position
+                birb->transform = glm::scale(birb->transform, glm::vec3(0.4f, 0.4f, 0.4f)); // Set scale
+                birb->Translate(glm::vec3(0.0f, -0.1f, 0.0f)); // Move down slightly
+    
+                // Update birb's internal position variable
+                birb->position = glm::vec3(birb->transform[3]);
+    
+                birb->SyncPhysicsFromTransform();
+    
                 // End game
                 GameStarted = false;
                 std::cout << "Birb dropped! Game ended." << std::endl;
@@ -301,27 +292,37 @@ int main()
             const float descentSpeed = 2.0f;
             glm::vec3 movement(0.0f, -descentSpeed * static_cast<float>(deltaTime), 0.0f);
             glm::vec3 oldPosition = claw->position;
-            glm::mat4 oldTransform = claw->GetTransform();
-                        
-            claw->Translate(movement);
-            
-            // Update birb physics if it's being carried
-            if (birbPickedUp) {
-                UpdateBirbPhysics();
-            }
-            
-            // Check for collision with claw machine or ground
-            if (physicsWorld->testOverlap(claw->rigidBody, claw_machine->rigidBody) ||
-                physicsWorld->testOverlap(claw->rigidBody, ground->rigidBody))
+    glm::mat4 oldTransform = claw->GetTransform();
+                     
+            // Calculate potential new position
+            glm::vec3 movement(0.0f);
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             {
-                // Collision detected, restore position and start moving up
+                movement.z -= clawSpeed * dt;
+            }
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            {
+                movement.z += clawSpeed * dt;
+            }
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            {
+                movement.x -= clawSpeed * dt;
+            }
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            {
+                movement.x += clawSpeed * dt;
+            }
+    
+            // Apply movement
+            claw->Translate(movement);
+    
+            // Manually test overlap (kinematic vs static doesn't trigger callbacks!)
+            if (physicsWorld->testOverlap(claw->rigidBody, claw_machine->rigidBody))
+            {
+                // Restore EVERYTHING - position, transform, and physics
                 claw->position = oldPosition;
                 claw->transform = oldTransform;
                 claw->SyncPhysicsFromTransform();
-                
-                shouldMoveDown = false;
-                shouldMoveUp = true;
-                std::cout << "Claw hit collision, starting ascent" << std::endl;
             }
         }
     
@@ -340,11 +341,6 @@ int main()
                     movement = direction * distance; // Don't overshoot
                 }
                 claw->Translate(movement);
-                
-                // Update birb physics if it's being carried
-                if (birbPickedUp) {
-                    UpdateBirbPhysics();
-                }
             }
             else
             {
@@ -352,21 +348,9 @@ int main()
                 claw->position = originalPosition;
                 claw->transform = glm::translate(glm::mat4(1.0f), originalPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(0.4f, 0.4f, 0.4f));
                 claw->SyncPhysicsFromTransform();
-                
-                // Update birb one last time at final position
-                if (birbPickedUp) {
-                    UpdateBirbPhysics();
-                }
-                
                 shouldMoveUp = false;
                 canMoveByKeys = true;
                 std::cout << "Claw returned to original position" << std::endl;
-                
-                // End game if birb was not picked up after one cycle
-                if (!birbPickedUp) {
-                    GameStarted = false;
-                    std::cout << "Game ended - birb not picked up" << std::endl;
-                }
             }
         }
         
@@ -382,11 +366,6 @@ int main()
      
             birbPickedUp = true;
             std::cout << "Birb picked up!" << std::endl;
-        }
-        
-        // Update birb physics to follow claw while picked up (for horizontal movement)
-        if (birbPickedUp && canMoveByKeys) {
-            UpdateBirbPhysics();
         }
         
         // Update physics simulation (cast to float/decimal for ReactPhysics3D)
@@ -407,19 +386,17 @@ int main()
             birb->Draw(unifiedShader);
         }
 
-        // Draw UI Overlay (always on top, depth test disabled in Logo::Render)
-        // Draw main logo (top-right)
+        // Draw UI Overlay
         if (logo && logo->IsLoaded()) {
             logo->Render();
         }
         
-        // Draw birb icon (bottom-left) if collected
+        // Draw birb icon if collected
         if (birbCollected && birbIcon && birbIcon->IsLoaded()) {
             birbIcon->Render();
         }
         
-        // Switch back to unified shader for 3D rendering
-        unifiedShader.use();
+        unifiedShader.use(); // Switch back to unified shader
 
         glfwSwapBuffers(window);
         glfwPollEvents();

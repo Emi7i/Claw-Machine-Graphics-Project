@@ -4,7 +4,8 @@
 // Forward declaration for texture loading function
 unsigned int TextureFromFile(const char* path, const std::string& directory, bool gamma = false);
 
-Logo::Logo() : VAO(0), VBO(0), texture(0), uiShader(nullptr), loaded(false) {
+Logo::Logo() : VAO(0), VBO(0), texture(0), uiShader(nullptr), loaded(false),
+               posLeft(0.7f), posBottom(0.7f), posRight(0.95f), posTop(0.9f) {
 }
 
 Logo::~Logo() {
@@ -12,30 +13,25 @@ Logo::~Logo() {
 }
 
 bool Logo::Initialize(const char* texturePath, const char* textureDirectory) {
-    // Define quad for top-right corner (NDC coordinates: x, y, u, v)
-    float logoVertices[] = {
-        //  Positions    // TexCoords (flipped on Y axis)
-        0.7f,  0.9f,     0.0f, 0.0f, // Top Left
-        0.95f, 0.9f,     1.0f, 0.0f, // Top Right
-        0.7f,  0.7f,     0.0f, 1.0f, // Bottom Left
-        0.95f, 0.7f,     1.0f, 1.0f  // Bottom Right
-    };
+    // Default position: top-right corner
+    return Initialize(texturePath, textureDirectory, 0.7f, 0.7f, 0.95f, 0.9f);
+}
 
+bool Logo::Initialize(const char* texturePath, const char* textureDirectory, 
+                     float left, float bottom, float right, float top) {
+    // Store position
+    posLeft = left;
+    posBottom = bottom;
+    posRight = right;
+    posTop = top;
+    
     // Generate and configure VAO and VBO
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(logoVertices), &logoVertices, GL_STATIC_DRAW);
     
-    // Position attribute
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    // Create initial vertices
+    UpdateVertices();
     
-    // Texture coordinate attribute
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-
     // Load texture
     texture = TextureFromFile(texturePath, textureDirectory);
     loaded = (texture != 0);
@@ -51,6 +47,39 @@ bool Logo::Initialize(const char* texturePath, const char* textureDirectory) {
     uiShader = new Shader("ui.vert", "ui.frag");
     
     return true;
+}
+
+void Logo::SetPosition(float left, float bottom, float right, float top) {
+    posLeft = left;
+    posBottom = bottom;
+    posRight = right;
+    posTop = top;
+    UpdateVertices();
+}
+
+void Logo::UpdateVertices() {
+    // Define quad with current position (NDC coordinates: x, y, u, v)
+    float logoVertices[] = {
+        //  Positions          // TexCoords (flipped on Y axis)
+        posLeft,  posTop,      0.0f, 0.0f, // Top Left
+        posRight, posTop,      1.0f, 0.0f, // Top Right
+        posLeft,  posBottom,   0.0f, 1.0f, // Bottom Left
+        posRight, posBottom,   1.0f, 1.0f  // Bottom Right
+    };
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(logoVertices), &logoVertices, GL_STATIC_DRAW);
+    
+    // Position attribute
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    
+    // Texture coordinate attribute
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    
+    glBindVertexArray(0);
 }
 
 void Logo::Render() {
@@ -75,6 +104,7 @@ void Logo::Render() {
     
     // Reset state
     glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(0);
     glEnable(GL_DEPTH_TEST);
 }
 
