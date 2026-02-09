@@ -18,7 +18,6 @@ public:
     std::vector<GameObject*> children;
     
 private:
-    // Keep collision data alive - ReactPhysics3D stores pointers, not copies!
     std::vector<rp3d::Vector3> collisionVertices;
     std::vector<int> collisionIndices;
     std::vector<float> collisionVertexArray;
@@ -47,6 +46,7 @@ public:
         }
     }
 
+    
     // Destructor
     ~GameObject() {
         delete model;
@@ -55,6 +55,7 @@ public:
         }
     }
     
+    
     void SetTransform(const glm::mat4& newTransform) {
         transform = newTransform;
         position = glm::vec3(transform[3]);
@@ -62,14 +63,17 @@ public:
         SyncPhysicsFromTransform();
     }
     
+    
     void AddChild(GameObject* child) {
         children.push_back(child);
     }
+    
     
     void RemoveChild(GameObject* child) {
         auto it = std::remove(children.begin(), children.end(), child);
         children.erase(it, children.end());
     }
+    
 
     void Rotate(float angle, glm::vec3 axis) {
         transform = glm::rotate(transform, glm::radians(angle), axis);
@@ -78,6 +82,7 @@ public:
         SyncPhysicsFromTransform();
     }
 
+    
     void Translate(glm::vec3 positionOffset) {
         transform = glm::translate(transform, positionOffset);
         // Update local position variable from matrix translation column
@@ -85,6 +90,7 @@ public:
         SyncPhysicsFromTransform();
     }
 
+    
     void Scale(glm::vec3 newScale) {
         this->scale = newScale;
         // Rebuild the transform matrix from position, rotation, and scale
@@ -94,6 +100,7 @@ public:
         transform = glm::scale(transform, newScale);
         SyncPhysicsFromTransform();
     }
+    
 
     void Draw(Shader& shader) {
         shader.setMat4("uM", transform);
@@ -106,10 +113,12 @@ public:
             child->model->Draw(shader);
         }
     }
+    
 
     glm::mat4 GetTransform() const {
         return transform;
     }
+    
     
     void SyncPhysicsFromTransform() {
         if (!rigidBody) return;
@@ -127,6 +136,7 @@ public:
             rp3d::Collider* collider = rigidBody->getCollider(i);
         }
     }
+    
     
     void SyncTransformFromPhysics() {
         if (!rigidBody) return;
@@ -147,10 +157,11 @@ public:
         transform = glm::scale(transform, scale);
     }
     
-    // Check if a GameObject is a child of this GameObject
+    
     bool IsChild(GameObject* obj) const {
         return std::find(children.begin(), children.end(), obj) != children.end();
     }
+    
     
     void CreatePhysicsBody(rp3d::PhysicsWorld* world, rp3d::BodyType bodyType) {
         rp3d::Vector3 pos(position.x, position.y, position.z);
@@ -159,6 +170,7 @@ public:
         rigidBody = world->createRigidBody(physicsTransform);
         rigidBody->setType(bodyType);
     }
+    
     
     void AddConcaveCollision(rp3d::PhysicsCommon& physicsCommon) {
         if (!rigidBody || !model) return;
@@ -198,7 +210,7 @@ public:
         std::cout << "Added Concave collision with " << collisionIndices.size() / 3 << " triangles." << std::endl;
     }
     
-    // Add perfect mesh collision to this GameObject
+    
     void AddConvexCollision(rp3d::PhysicsCommon& physicsCommon) {
         if (!rigidBody) {
             std::cout << "Error: RigidBody must be created before adding mesh collision!" << std::endl;
@@ -250,7 +262,7 @@ public:
         std::cout << "Added mesh collision with " << collisionIndices.size() / 3 << " triangles" << std::endl;
     }
     
-    // Helper to add simple box collision
+    
     void AddBoxCollision(rp3d::PhysicsCommon& physicsCommon, glm::vec3 halfExtents) {
         if (!rigidBody) {
             std::cout << "Error: RigidBody must be created before adding box collision!" << std::endl;

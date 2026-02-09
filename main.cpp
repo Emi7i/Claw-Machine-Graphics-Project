@@ -53,6 +53,10 @@ Logo* birbIcon = nullptr;
 // Game state
 bool GameStarted = false;
 
+// Depth buffer and backface culling state
+bool depthTestEnabled = true;
+bool backfaceCullingEnabled = false;
+
 // Claw movement speed
 float clawSpeed = 5.0f;
 
@@ -178,6 +182,52 @@ int main()
         }
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Toggle depth buffer with 'G' key
+        static bool gPressed = false;
+        if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS && !gPressed)
+        {
+            gPressed = true;
+            depthTestEnabled = !depthTestEnabled;
+        }
+        if (glfwGetKey(window, GLFW_KEY_G) == GLFW_RELEASE)
+        {
+            gPressed = false;
+        }
+        
+        if (depthTestEnabled)
+        {
+            glEnable(GL_DEPTH_TEST);
+        }
+        else
+        {
+            glDisable(GL_DEPTH_TEST);
+        }
+
+        // Toggle backface culling with 'F' key
+        static bool fPressed = false;
+        if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !fPressed)
+        {
+            fPressed = true;
+            backfaceCullingEnabled = !backfaceCullingEnabled;
+        }
+        if (glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE)
+        {
+            fPressed = false;
+        }
+        
+        if (backfaceCullingEnabled)
+        {
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+            glFrontFace(GL_CW);
+            std::cout << "Backface culling enabled" << std::endl;
+        }
+        else
+        {
+            glDisable(GL_CULL_FACE);
+            std::cout << "Backface culling disabled" << std::endl;
+        }
 
         // Check for E key to start game when looking at claw machine
         static bool ePressed = false;
@@ -419,7 +469,14 @@ int main()
         }
         
         // Draw
+        // Disable backface culling for claw_machine to prevent disappearing
+        if (backfaceCullingEnabled) {
+            glDisable(GL_CULL_FACE);
+        }
         claw_machine->Draw(unifiedShader);
+        if (backfaceCullingEnabled) {
+            glEnable(GL_CULL_FACE);
+        }
         claw->Draw(unifiedShader);
         ground->Draw(unifiedShader); 
         
