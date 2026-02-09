@@ -590,7 +590,7 @@ void InitializeGameObjects()
     trigger = new GameObject("res/trigger.obj", physicsWorld, rp3d::BodyType::KINEMATIC);
     trigger->AddSphereCollision(physicsCommon, 0.2f);
     
-    claw->AddChild(trigger);
+    //claw->AddChild(trigger);
     
     // ==================== BIRBS (Multiple) ====================
     // Birb 1
